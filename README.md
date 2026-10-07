@@ -4,6 +4,8 @@
 [![python](https://img.shields.io/badge/python-3.11%2B-blue)]()
 [![license](https://img.shields.io/badge/license-TBD-yellow)]()
 
+![Web UI](docs/screenshots/web-ui.png)
+
 **Context-aware, consistent, multilingual, long-form story translation with local-first AI and measurable quality.**
 
 Not a sentence-by-sentence machine translator. Story Translate treats the unit of translation as a *story segment interpreted within a persistent world*: Story Bible, canonical terminology, translation memory, hierarchical context, model routing, a second literary pass, and rigorous QA.
