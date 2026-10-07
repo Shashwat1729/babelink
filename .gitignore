@@ -9,3 +9,4 @@ build/
 !tests/fixtures/*.epub
 data/
 projects/
+demo*/
