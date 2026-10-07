@@ -46,7 +46,7 @@ previous phase on fixed dataset slices.
 - [x] Hardware detection (RAM/VRAM/CPU)
 - [x] Model registry (starter list) + per-pair recommendation
 - [x] Benchmark harness (single-sample latency)
-- [ ] Per-task model routing presets
+- [x] Per-task model routing presets (fast/balanced/quality/max)
 - [ ] Confidence-based escalation
 - [ ] Full benchmarking harness (tok/s, memory, cancellable)
 
