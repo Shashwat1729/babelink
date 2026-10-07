@@ -38,3 +38,43 @@ def write_leaderboard(results: list[dict], out_path: str | Path) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(lines), encoding="utf-8")
     return out
+
+
+def run_matrix(records: list[dict], provider: LLMProvider, project_dir: str, glossary: dict[str, str] | None = None) -> list[dict]:
+    """Experiments A–F from spec §57, degraded for local runs."""
+    from .context import gather_context, render_context
+
+    results = []
+    configs = [
+        ("A_bare", {}),
+        ("B_glossary", {"glossary": glossary or {}}),
+        ("C_glossary+context", {"glossary": glossary or {}, "use_context": True}),
+    ]
+    for label, cfg in configs:
+        scores = []
+        for rec in records:
+            ctx = ""
+            if cfg.get("use_context"):
+                ctx = render_context(gather_context(project_dir, rec["source"], [], rec.get("context", "")))
+            out = provider.translate(rec["source"], glossary=cfg.get("glossary"), context=ctx)
+            scores.append(char_f1(out, rec["reference"]))
+        results.append({"config": label, "model": provider.name, "samples": len(records), "avg_char_f1": round(sum(scores) / max(len(scores), 1), 4)})
+    # F: full pipeline with refinement
+    scores = []
+    for rec in records:
+        ctx = render_context(gather_context(project_dir, rec["source"], [], rec.get("context", "")))
+        draft = provider.translate(rec["source"], glossary=glossary, context=ctx)
+        refined = provider.refine(rec["source"], draft)
+        scores.append(char_f1(refined, rec["reference"]))
+    results.append({"config": "F_full+refine", "model": provider.name, "samples": len(records), "avg_char_f1": round(sum(scores) / max(len(scores), 1), 4)})
+    return results
+
+
+def write_matrix_leaderboard(results: list[dict], out_path: str | Path) -> Path:
+    lines = ["| Config | Model | Samples | Avg Char F1 |", "|---|---|---|---|"]
+    for r in results:
+        lines.append(f"| {r['config']} | {r['model']} | {r['samples']} | {r['avg_char_f1']} |")
+    out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join(lines), encoding="utf-8")
+    return out

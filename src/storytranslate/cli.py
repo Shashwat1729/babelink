@@ -86,6 +86,13 @@ def main(argv: list[str] | None = None) -> int:
     pweb.add_argument("--host", default="127.0.0.1")
     pweb.add_argument("--port", type=int, default=8000)
 
+    pm2 = sub.add_parser("matrix")
+    pm2.add_argument("dataset", help="JSONL dataset path")
+    pm2.add_argument("--provider", default="mock", choices=["mock", "ollama", "openai-compatible"])
+    pm2.add_argument("--model", default="huihui_ai/qwen3-abliterated:4b")
+    pm2.add_argument("--base-url", default="http://localhost:8080/v1")
+    pm2.add_argument("--out", default="matrix.md")
+
     pm = sub.add_parser("models")
     pm.add_argument("--target-lang", default="en")
     pm.add_argument("--quality", default="balanced", choices=["fast", "balanced", "quality", "max"])
@@ -190,6 +197,15 @@ def main(argv: list[str] | None = None) -> int:
         import uvicorn
 
         uvicorn.run("storytranslate.web:app", host=args.host, port=args.port, reload=False)
+        return 0
+
+    if args.command == "matrix":
+        from .datasets import LocalFileAdapter
+        from .eval import run_matrix, write_matrix_leaderboard
+
+        records = LocalFileAdapter(args.dataset).load()
+        results = run_matrix(records, _provider(args), args.project_dir)
+        print(write_matrix_leaderboard(results, args.out))
         return 0
 
     if args.command == "models":

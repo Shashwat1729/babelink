@@ -8,6 +8,7 @@ build/
 *.epub
 !tests/fixtures/*.epub
 data/
+!data/eval_sample.jsonl
 projects/
 demo*/
 web_project/
