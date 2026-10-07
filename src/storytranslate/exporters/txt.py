@@ -13,11 +13,19 @@ def export_txt(db: Database, project_id: int, out_path: str | Path) -> Path:
     ).fetchall()
     parts: list[str] = []
     for ch in chapters:
-        parts.append(ch["title"])
+        parts.append(ch["title"].strip())
         parts.append("")
+        prev_blank = False
         for s in db.segments_for_chapter(ch["id"]):
-            parts.append(s["translated_text"] or s["source_text"])
-            parts.append("")
+            text = (s["translated_text"] or s["source_text"]).strip()
+            if not text:
+                continue
+            parts.append(text)
+            parts.append("")  # blank line between paragraphs
+        parts.append("")  # blank line between chapters
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text("\n".join(parts), encoding="utf-8")
+    text = "\n".join(parts)
+    while "\n\n\n" in text:
+        text = text.replace("\n\n\n", "\n\n")
+    out_path.write_text(text.strip() + "\n", encoding="utf-8")
     return out_path

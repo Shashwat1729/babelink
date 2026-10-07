@@ -10,18 +10,22 @@ from ebooklib import epub
 from ..db import Database
 
 
+def _replace_text_nodes(tag, new_text: str) -> None:
+    """Replace a paragraph's text. Preserves the tag + attributes (class/style =
+    alignment/spacing). Inline b/i/em tags are NOT preserved yet because we
+    translate per-paragraph; see ponytail ceiling note in spec §68."""
+    tag.clear()
+    tag.append(new_text)
+
+
 def _replace_paragraphs(html: str, translated: list[str]) -> str:
     soup = BeautifulSoup(html, "lxml")
-    tags = [t for t in soup.find_all(["p", "div", "blockquote", "li"])]
-    # only replace tags that produced segments (first-level text blocks); keep simple: replace in order of paragraph tags
+    tags = soup.find_all(["p", "div", "blockquote", "li"])
     text_tags = [t for t in tags if " ".join(t.get_text(" ", strip=True).split())]
-    # iterate and substitute paragraph-wise; if counts mismatch, fall back to appending
     if len(text_tags) == len(translated):
         for tag, text in zip(text_tags, translated):
-            tag.clear()
-            tag.append(text)
+            _replace_text_nodes(tag, text)
         return str(soup)
-    # fallback: strip body content and insert paragraphs
     body = soup.find("body") or soup
     body.clear()
     for text in translated:
