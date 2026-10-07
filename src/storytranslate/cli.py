@@ -82,6 +82,10 @@ def main(argv: list[str] | None = None) -> int:
     prt.add_argument("--model", default="qwen2.5:7b")
     prt.add_argument("--base-url", default="http://localhost:8080/v1")
 
+    pweb = sub.add_parser("web")
+    pweb.add_argument("--host", default="127.0.0.1")
+    pweb.add_argument("--port", type=int, default=8000)
+
     pm = sub.add_parser("models")
     pm.add_argument("--target-lang", default="en")
     pm.add_argument("--quality", default="balanced", choices=["fast", "balanced", "quality", "max"])
@@ -180,6 +184,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Marked {n} segments stale; retranslating")
         n2 = translate_project(db, args.project_id, _provider(args), project_dir=args.project_dir)
         print(f"Retranslated {n2} segments")
+        return 0
+
+    if args.command == "web":
+        import uvicorn
+
+        uvicorn.run("storytranslate.web:app", host=args.host, port=args.port, reload=False)
         return 0
 
     if args.command == "models":

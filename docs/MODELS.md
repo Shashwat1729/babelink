@@ -17,7 +17,7 @@ Fiction often contains mature or disturbing content. Standard instruct models ma
 refuse ordinary translation. Use abliterated (refusal-removed) local variants, e.g.:
 
 ```bash
-ollama pull huihui_ai/qwen3-abliterated
+ollama pull huihui_ai/qwen3-abliterated:4b   # verified working on CPU-only 16GB RAM
 ```
 
 These are uncensored Qwen builds from Huihui-ai. Use a normal instruct model if

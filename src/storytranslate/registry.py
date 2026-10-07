@@ -23,6 +23,9 @@ DEFAULT_REGISTRY: list[ModelInfo] = [
     ModelInfo("qwen2.5:14b", "ollama", "ollama", ["zh", "en", "ja", "ko"], {"translation": True, "literary_editing": True, "reasoning": True, "long_context": True}, ["translation", "refinement", "analysis"], ram_gb=16, vram_gb=12, quantizations=["Q4_K_M"]),
     ModelInfo("aya:8b", "ollama", "ollama", ["en", "hi", "es", "fr", "de", "zh"], {"translation": True}, ["translation"], ram_gb=8, vram_gb=6, quantizations=["Q4_K_M"]),
     ModelInfo("nllb-200", "transformers", "transformers", ["zh", "en", "hi", "es", "ja", "ko", "fr", "de"], {"translation": True, "ner": False}, ["translation"], ram_gb=4, vram_gb=2, quantizations=[]),
+    ModelInfo("huihui_ai/qwen3-abliterated:4b", "ollama", "ollama", ["zh", "en", "ja", "ko"], {"translation": True, "literary_editing": True, "reasoning": True}, ["translation", "analysis"], ram_gb=4, vram_gb=0, quantizations=["Q4_K_M"]),
+    ModelInfo("huihui_ai/qwen3-abliterated:latest", "ollama", "ollama", ["zh", "en", "ja", "ko"], {"translation": True, "literary_editing": True, "reasoning": True, "long_context": True}, ["translation", "refinement"], ram_gb=8, vram_gb=6, quantizations=["Q4_K_M"]),
+    ModelInfo("huihui_ai/gemma3-abliterated:4b", "ollama", "ollama", ["en", "zh", "ja", "ko", "hi", "es", "fr", "de"], {"translation": True, "literary_editing": True}, ["translation", "refinement"], ram_gb=4, vram_gb=0, quantizations=["Q4_K_M"]),
     ModelInfo("muse-3b-4k", "ollama", "ollama", ["en"], {"reasoning": True}, ["qa", "analysis"], ram_gb=4, vram_gb=0, quantizations=[]),
 ]
 

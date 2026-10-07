@@ -10,3 +10,8 @@ build/
 data/
 projects/
 demo*/
+web_project/
+leaderboard.md
+*.db
+*.db-wal
+*.db-shm
