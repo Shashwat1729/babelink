@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+dist/
+build/
+.pytest_cache/
+*.epub
+!tests/fixtures/*.epub
+data/
+projects/
