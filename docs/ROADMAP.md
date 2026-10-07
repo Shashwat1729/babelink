@@ -52,10 +52,12 @@ previous phase on fixed dataset slices.
 
 ## Phase 5 — Evaluation
 
-- [ ] Dataset adapters (HF, OPUS, WMT, FLORES, local)
+- [x] Local dataset adapter (JSONL, normalized record)
+- [x] Char-F1 benchmark runner + leaderboard writer
+- [ ] Hugging Face / OPUS / WMT / FLORES network adapters
 - [ ] MTL failure corpus schema
-- [ ] Benchmark runner (experiments A–F)
-- [ ] Leaderboard + human-eval UI data path
+- [ ] Full experiment matrix (A–F) with LLM calls
+- [ ] Human-eval UI data path
 - [ ] Regression suite from real bugs
 
 ## Phase 6 — Comics

@@ -91,6 +91,13 @@ def main(argv: list[str] | None = None) -> int:
     pbenchmark.add_argument("--model", default="qwen2.5:7b")
     pbenchmark.add_argument("--base-url", default="http://localhost:8080/v1")
 
+    pbm = sub.add_parser("benchmark-run")
+    pbm.add_argument("dataset", help="JSONL dataset path")
+    pbm.add_argument("--provider", default="mock", choices=["mock", "ollama", "openai-compatible"])
+    pbm.add_argument("--model", default="qwen2.5:7b")
+    pbm.add_argument("--base-url", default="http://localhost:8080/v1")
+    pbm.add_argument("--out", default="leaderboard.md")
+
     pe = sub.add_parser("export")
     pe.add_argument("project_id", type=int)
     pe.add_argument("--source", required=True, help="Original document path")
@@ -189,6 +196,16 @@ def main(argv: list[str] | None = None) -> int:
         from .benchmark import benchmark
 
         print(benchmark(_provider(args)))
+        return 0
+
+    if args.command == "benchmark-run":
+        from .datasets import LocalFileAdapter
+        from .eval import run_benchmark, write_leaderboard
+
+        records = LocalFileAdapter(args.dataset).load()
+        result = run_benchmark(records, _provider(args))
+        print(result)
+        print(write_leaderboard([result], args.out))
         return 0
 
     if args.command == "export":
