@@ -72,7 +72,7 @@ def translate_project(db: Database, project_id: int, provider: LLMProvider, *, l
         pending = pending[:limit]
     done = 0
     for s in pending:
-        tm = db.tm_lookup(project_id, s["source_text"])
+        tm = None if s["state"] == SegmentState.STALE.value else db.tm_lookup(project_id, s["source_text"])
         if tm:
             translated = tm["translated_text"]
         else:

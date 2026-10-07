@@ -58,6 +58,30 @@ def main(argv: list[str] | None = None) -> int:
     pb = sub.add_parser("storybible")
     pb.add_argument("section", nargs="?", default=None)
 
+    pr = sub.add_parser("refine")
+    pr.add_argument("project_id", type=int)
+    pr.add_argument("--provider", default="mock", choices=["mock", "ollama", "openai-compatible"])
+    pr.add_argument("--model", default="qwen2.5:7b")
+    pr.add_argument("--base-url", default="http://localhost:8080/v1")
+    pr.add_argument("--limit", type=int, default=None)
+
+    pv = sub.add_parser("review")
+    pv.add_argument("project_id", type=int)
+    pv.add_argument("--provider", default="mock", choices=["mock", "ollama", "openai-compatible"])
+    pv.add_argument("--model", default="qwen2.5:7b")
+    pv.add_argument("--base-url", default="http://localhost:8080/v1")
+
+    ps = sub.add_parser("style")
+    ps.add_argument("preset", choices=["literal", "faithful-natural", "literary", "highly-literary", "custom"])
+
+    prt = sub.add_parser("retranslate")
+    prt.add_argument("project_id", type=int)
+    prt.add_argument("--term", required=True)
+    prt.add_argument("--new", required=True)
+    prt.add_argument("--provider", default="mock", choices=["mock", "ollama", "openai-compatible"])
+    prt.add_argument("--model", default="qwen2.5:7b")
+    prt.add_argument("--base-url", default="http://localhost:8080/v1")
+
     pe = sub.add_parser("export")
     pe.add_argument("project_id", type=int)
     pe.add_argument("--source", required=True, help="Original document path")
@@ -107,6 +131,39 @@ def main(argv: list[str] | None = None) -> int:
         db = _db(args)
         for row in db.qa_for_project(args.project_id):
             print(row["severity"], row["type"], row["message"])
+        return 0
+
+    if args.command == "refine":
+        from .refinement import run_refinement
+
+        db = _db(args)
+        n = run_refinement(db, args.project_id, _provider(args), args.project_dir, limit=args.limit)
+        print(f"Refined {n} segments")
+        return 0
+
+    if args.command == "review":
+        from .qa import ai_qa
+
+        db = _db(args)
+        n = ai_qa(db, args.project_id, _provider(args))
+        print(f"Reviewed {n} segments")
+        return 0
+
+    if args.command == "style":
+        from . import story_bible
+
+        story_bible.save_section(args.project_dir, "style_guide", {"preset": args.preset})
+        print(f"Style preset set to {args.preset}")
+        return 0
+
+    if args.command == "retranslate":
+        from .refinement import mark_stale_by_term
+
+        db = _db(args)
+        n = mark_stale_by_term(db, args.project_id, args.term, args.new)
+        print(f"Marked {n} segments stale; retranslating")
+        n2 = translate_project(db, args.project_id, _provider(args), project_dir=args.project_dir)
+        print(f"Retranslated {n2} segments")
         return 0
 
     if args.command == "export":

@@ -34,11 +34,12 @@ previous phase on fixed dataset slices.
 
 ## Phase 3 — Quality
 
-- [ ] Two-pass translation + literary refinement with guardrails
-- [ ] AI QA structured findings
-- [ ] Selective retranslation on term change
-- [ ] Human review states + edits stored
-- [ ] Style guide presets
+- [x] Two-pass translation + literary refinement with guardrails
+- [x] AI QA structured findings (provider.review, mock-safe)
+- [x] Selective retranslation via STALE + term change
+- [x] Style preset stored in Story Bible; injected into refinement prompt
+- [ ] Human review states UI + edit history (CLI only)
+- [ ] Selective retranslation count surfaced in CLI output
 
 ## Phase 4 — Local ML
 
