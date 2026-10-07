@@ -10,15 +10,16 @@ class OllamaProvider:
         self.base_url = base_url.rstrip("/")
         self.name = f"ollama:{model}"
 
-    def translate(self, source: str, glossary: dict[str, str] | None = None, max_tokens: int = 1024) -> str:
+    def translate(self, source: str, glossary: dict[str, str] | None = None, context: str = "", max_tokens: int = 1024) -> str:
         glossary_block = ""
         if glossary:
             lines = "\n".join(f"- {k} -> {v}" for k, v in glossary.items())
             glossary_block = f"\nCanonical terminology (use exactly these):\n{lines}\n"
+        context_block = f"\nStory context:\n{context}\n" if context else ""
         prompt = (
             "Translate the following fiction into the target language. Preserve meaning, "
             "names, terminology, and paragraph structure. Output only the translation.\n"
-            f"{glossary_block}\nSource:\n{source}"
+            f"{glossary_block}{context_block}\nSource:\n{source}"
         )
         resp = httpx.post(
             f"{self.base_url}/api/generate",

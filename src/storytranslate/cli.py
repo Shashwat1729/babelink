@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -54,6 +55,9 @@ def main(argv: list[str] | None = None) -> int:
     pq = sub.add_parser("qa")
     pq.add_argument("project_id", type=int)
 
+    pb = sub.add_parser("storybible")
+    pb.add_argument("section", nargs="?", default=None)
+
     pe = sub.add_parser("export")
     pe.add_argument("project_id", type=int)
     pe.add_argument("--source", required=True, help="Original document path")
@@ -74,7 +78,17 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "analyze":
         db = _db(args)
-        print(analyze_project(db, args.project_id))
+        print(analyze_project(db, args.project_id, project_dir=args.project_dir))
+        return 0
+
+    if args.command == "storybible":
+        from . import story_bible
+
+        if args.section:
+            data = story_bible.load_section(args.project_dir, args.section)
+            print(json.dumps(data, ensure_ascii=False, indent=2)[:4000])
+        else:
+            print("sections:", ", ".join(story_bible.SECTIONS))
         return 0
 
     if args.command == "terminology":
@@ -85,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "translate":
         db = _db(args)
-        n = translate_project(db, args.project_id, _provider(args), limit=args.limit)
+        n = translate_project(db, args.project_id, _provider(args), limit=args.limit, project_dir=args.project_dir)
         print(f"Translated {n} segments")
         return 0
 

@@ -11,15 +11,16 @@ class OpenAICompatibleProvider:
         self.api_key = api_key
         self.name = f"openai-compatible:{model}"
 
-    def translate(self, source: str, glossary: dict[str, str] | None = None, max_tokens: int = 1024) -> str:
+    def translate(self, source: str, glossary: dict[str, str] | None = None, context: str = "", max_tokens: int = 1024) -> str:
         glossary_block = ""
         if glossary:
             lines = "\n".join(f"- {k} -> {v}" for k, v in glossary.items())
             glossary_block = f"\nCanonical terminology (use exactly these):\n{lines}\n"
+        context_block = f"\nStory context:\n{context}\n" if context else ""
         prompt = (
             "Translate the following fiction into the target language. Preserve meaning, "
             "names, terminology, and paragraph structure. Output only the translation.\n"
-            f"{glossary_block}\nSource:\n{source}"
+            f"{glossary_block}{context_block}\nSource:\n{source}"
         )
         headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
         resp = httpx.post(

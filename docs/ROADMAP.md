@@ -22,13 +22,15 @@ previous phase on fixed dataset slices.
 
 ## Phase 2 — Story Intelligence
 
-- [ ] Story Bible (characters, locations, orgs, items, abilities, relationships, timeline, world rules)
-- [ ] Entity extraction + resolution statuses
-- [ ] Terminology extraction + progressive terminology UI flow
-- [ ] Chapter/scene/arc summaries
-- [ ] Hybrid context retrieval (keyword + entity + semantic + recency)
-- [ ] Context budget assembly
-- [ ] Contradiction detection
+- [x] Story Bible (JSON sections; user-editable)
+- [x] Terminology extraction into Bible + recurring-term mining
+- [x] Chapter/arc summaries
+- [x] Hybrid context retrieval (entity overlap + keyword + recency)
+- [x] Context budget assembly
+- [x] Contradiction detection (terminology drift)
+- [ ] Entity extraction + resolution statuses (LLM-backed; Phase 2.5)
+- [ ] Progressive terminology confirm/edit/ignore UI flow (CLI now, UI later)
+- [ ] Full relationships/timeline tracking
 
 ## Phase 3 — Quality
 

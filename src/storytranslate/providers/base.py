@@ -9,7 +9,7 @@ from typing import Protocol
 class LLMProvider(Protocol):
     name: str
 
-    def translate(self, source: str, glossary: dict[str, str] | None = None, max_tokens: int = 1024) -> str:
+    def translate(self, source: str, glossary: dict[str, str] | None = None, context: str = "", max_tokens: int = 1024) -> str:
         ...
 
 
@@ -21,7 +21,7 @@ class MockProvider:
 
     name = "mock"
 
-    def translate(self, source: str, glossary: dict[str, str] | None = None, max_tokens: int = 1024) -> str:
+    def translate(self, source: str, glossary: dict[str, str] | None = None, context: str = "", max_tokens: int = 1024) -> str:
         out = source
         for src, dst in (glossary or {}).items():
             out = out.replace(src, dst)

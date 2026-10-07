@@ -9,10 +9,13 @@ from .langdetect import detect_language
 from .models import ModelRun, SegmentState, TMEntry, TerminologyEntry
 from .providers.base import LLMProvider
 from .qa import qa_segment
-from .terminology import mine_terms
+from .terminology import mine_terms, detect_contradictions
+from .summaries import write_summaries
+from .context import gather_context, render_context
+from .story_bible import save_section
 
 
-def analyze_project(db: Database, project_id: int) -> dict:
+def analyze_project(db: Database, project_id: int, project_dir: Optional[str] = None) -> dict:
     """Detect language, mine terminology, mark segments ANALYZED."""
     segs = db.conn.execute(
         "SELECT * FROM segments WHERE project_id=? ORDER BY chapter_id, order_index", (project_id,)
@@ -34,10 +37,25 @@ def analyze_project(db: Database, project_id: int) -> dict:
     for s in segs:
         if s["state"] == SegmentState.UNPROCESSED.value:
             db.update_segment(s["id"], state=SegmentState.ANALYZED)
+    if project_dir:
+        # sync terminology into Story Bible + summaries + contradictions (Phase 2)
+        term_rows = []
+        for row in db.terminology_for_project(project_id):
+            term_rows.append({
+                "source_forms": json.loads(row["source_forms"]),
+                "concept": row["concept"],
+                "canonical_translation": json.loads(row["canonical_translation"]),
+                "policy": row["policy"],
+                "status": row["status"],
+                "occurrences": row["occurrences"],
+            })
+        save_section(project_dir, "terminology", term_rows)
+        write_summaries(db, project_id, project_dir)
+        detect_contradictions(db, project_id, project_dir)
     return {"language": lang, "segments": len(segs)}
 
 
-def translate_project(db: Database, project_id: int, provider: LLMProvider, *, limit: Optional[int] = None) -> int:
+def translate_project(db: Database, project_id: int, provider: LLMProvider, *, limit: Optional[int] = None, project_dir: Optional[str] = None) -> int:
     """Translate segments that still need it. Checkpoints after every segment."""
     project = db.get_project(project_id)
     run_id = db.add_model_run(ModelRun(None, project_id, "translation", provider.name, "v1", "", "", "", "{}"))
@@ -58,7 +76,17 @@ def translate_project(db: Database, project_id: int, provider: LLMProvider, *, l
         if tm:
             translated = tm["translated_text"]
         else:
-            translated = provider.translate(s["source_text"], glossary=glossary)
+            context = ""
+            if project_dir:
+                ch = db.conn.execute("SELECT summary FROM chapters WHERE id=?", (s["chapter_id"],)).fetchone()
+                recent_rows = db.conn.execute(
+                    "SELECT source_text FROM segments WHERE project_id=? AND translated_text IS NOT NULL AND id < ? ORDER BY id DESC LIMIT 8",
+                    (project_id, s["id"]),
+                ).fetchall()
+                recent = [r["source_text"] for r in reversed(recent_rows)]
+                items = gather_context(project_dir, s["source_text"], recent, (ch["summary"] or "") if ch else "")
+                context = render_context(items)
+            translated = provider.translate(s["source_text"], glossary=glossary, context=context)
             db.add_tm(TMEntry(None, project_id, s["source_text"], translated, model=provider.name, chapter_id=s["chapter_id"]))
         db.update_segment(s["id"], translated=translated, state=SegmentState.TRANSLATED, model_run_id=run_id)
         qa_segment(db, project_id, s["id"], s["source_text"], translated, project["source_lang"])

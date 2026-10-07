@@ -37,3 +37,32 @@ def mine_terms(texts: list[str], min_count: int = 3, top: int = 50) -> list[tupl
         if len(keep) >= top:
             break
     return keep
+
+
+def detect_contradictions(db, project_id: int, project_dir: str) -> list[dict]:
+    """Same source form -> different canonical translations = potential contradiction (spec §25)."""
+    import json
+    from collections import defaultdict
+
+    from .story_bible import add_conflict
+
+    seen: dict[str, set[str]] = defaultdict(set)
+    for row in db.terminology_for_project(project_id):
+        forms = json.loads(row["source_forms"])
+        canon = json.loads(row["canonical_translation"])
+        target = next(iter(canon.values()), "")
+        for f in forms:
+            if target:
+                seen[f].add(target)
+    conflicts = []
+    for form, targets in seen.items():
+        if len(targets) > 1:
+            conflict = {
+                "type": "terminology_drift",
+                "source_form": form,
+                "translations": sorted(targets),
+                "severity": "warning",
+            }
+            add_conflict(project_dir, conflict)
+            conflicts.append(conflict)
+    return conflicts
