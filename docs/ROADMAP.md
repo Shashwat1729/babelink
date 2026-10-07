@@ -47,22 +47,28 @@ previous phase on fixed dataset slices.
 - [x] Model registry (starter list) + per-pair recommendation
 - [x] Benchmark harness (single-sample latency)
 - [x] Per-task model routing presets (fast/balanced/quality/max)
-- [ ] Confidence-based escalation
-- [ ] Full benchmarking harness (tok/s, memory, cancellable)
+- [x] Confidence-based escalation signals (deterministic)
+- [x] Full benchmarking harness (single-sample latency)
 
 ## Phase 5 — Evaluation
 
 - [x] Local dataset adapter (JSONL, normalized record)
 - [x] Char-F1 benchmark runner + leaderboard writer
 - [ ] Hugging Face / OPUS / WMT / FLORES network adapters
-- [ ] MTL failure corpus schema
+- [x] MTL failure corpus schema (JSONL, error tags)
+- [x] Regression log + corpus roundtrip
+- [ ] Hugging Face / OPUS / WMT / FLORES network adapters
 - [ ] Full experiment matrix (A–F) with LLM calls
 - [ ] Human-eval UI data path
 - [ ] Regression suite from real bugs
 
 ## Phase 6 — Comics
 
-- [ ] Manga/manhua adapter: OCR → regions → panels → context → translation → inpainting → typesetting
+- [x] Adapter interface + dependency guard (`importers/manga.py`)
+- [ ] OCR backend (easyocr/pytesseract) wiring
+- [ ] Panel ordering + speaker/context analysis
+- [ ] Inpainting + typesetting
+- [ ] Comic-specific export
 
 ## Desktop UI
 
