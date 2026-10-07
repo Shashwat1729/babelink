@@ -43,11 +43,12 @@ previous phase on fixed dataset slices.
 
 ## Phase 4 — Local ML
 
-- [ ] Hardware detection
-- [ ] Model registry + recommendations
+- [x] Hardware detection (RAM/VRAM/CPU)
+- [x] Model registry (starter list) + per-pair recommendation
+- [x] Benchmark harness (single-sample latency)
 - [ ] Per-task model routing presets
 - [ ] Confidence-based escalation
-- [ ] Benchmarking harness (loading time, tok/s, memory)
+- [ ] Full benchmarking harness (tok/s, memory, cancellable)
 
 ## Phase 5 — Evaluation
 

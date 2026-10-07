@@ -82,6 +82,15 @@ def main(argv: list[str] | None = None) -> int:
     prt.add_argument("--model", default="qwen2.5:7b")
     prt.add_argument("--base-url", default="http://localhost:8080/v1")
 
+    pm = sub.add_parser("models")
+    pm.add_argument("--target-lang", default="en")
+    pm.add_argument("--quality", default="balanced", choices=["fast", "balanced", "quality", "max"])
+
+    pbenchmark = sub.add_parser("benchmark")
+    pbenchmark.add_argument("--provider", default="mock", choices=["mock", "ollama", "openai-compatible"])
+    pbenchmark.add_argument("--model", default="qwen2.5:7b")
+    pbenchmark.add_argument("--base-url", default="http://localhost:8080/v1")
+
     pe = sub.add_parser("export")
     pe.add_argument("project_id", type=int)
     pe.add_argument("--source", required=True, help="Original document path")
@@ -164,6 +173,22 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Marked {n} segments stale; retranslating")
         n2 = translate_project(db, args.project_id, _provider(args), project_dir=args.project_dir)
         print(f"Retranslated {n2} segments")
+        return 0
+
+    if args.command == "models":
+        from .hardware import detect
+        from .registry import recommend
+
+        hw = detect()
+        print(f"Hardware: {hw}")
+        for m in recommend(args.target_lang, hw["vram_gb"], hw["ram_gb"], quality=args.quality):
+            print(f"- {m.name} ({m.provider}/{m.backend}) ram~{m.ram_gb}GB vram~{m.vram_gb}GB tasks={m.recommended_tasks}")
+        return 0
+
+    if args.command == "benchmark":
+        from .benchmark import benchmark
+
+        print(benchmark(_provider(args)))
         return 0
 
     if args.command == "export":
