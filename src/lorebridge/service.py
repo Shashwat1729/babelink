@@ -7,13 +7,14 @@ from pathlib import Path
 from .db import Database
 from .importers import import_any, import_paste
 from .pipeline import analyze_project
+from .providers.gemini import GeminiProvider
 from .providers.base import MockProvider
 from .providers.ollama import OllamaProvider
 from .providers.openai_compatible import OpenAICompatibleProvider
 from .story_bible import project_root
 
 STYLES = ("literal", "faithful-natural", "literary", "highly-literary")
-PROVIDERS = ("mock", "ollama", "openai-compatible")
+PROVIDERS = ("mock", "ollama", "openai-compatible", "gemini")
 
 
 def make_provider(kind: str = "mock", model: str = "qwen2.5:7b", base_url: str = ""):
@@ -23,6 +24,8 @@ def make_provider(kind: str = "mock", model: str = "qwen2.5:7b", base_url: str =
         return OllamaProvider(model=model, **({"base_url": base_url} if base_url else {}))
     if kind == "openai-compatible":
         return OpenAICompatibleProvider(base_url=base_url or "http://localhost:8080/v1", model=model)
+    if kind == "gemini":
+        return GeminiProvider(model=model or "gemini-2.0-flash")
     raise ValueError(f"unknown provider: {kind}")
 
 
