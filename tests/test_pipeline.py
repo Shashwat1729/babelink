@@ -3,13 +3,13 @@ from pathlib import Path
 import pytest
 from ebooklib import epub
 
-from storytranslate.db import Database
-from storytranslate.exporters.epub import export_epub
-from storytranslate.importers import import_epub, import_txt
-from storytranslate.pipeline import analyze_project, translate_project
-from storytranslate.providers.base import MockProvider
-from storytranslate.segment import chapters_from_text
-from storytranslate.terminology import mine_terms
+from lorebridge.db import Database
+from lorebridge.exporters.epub import export_epub
+from lorebridge.importers import import_epub, import_txt
+from lorebridge.pipeline import analyze_project, translate_project
+from lorebridge.providers.base import MockProvider
+from lorebridge.segment import chapters_from_text
+from lorebridge.terminology import mine_terms
 
 
 def make_epub(path: Path) -> None:
@@ -78,3 +78,13 @@ def test_txt_import_and_resume_state(tmp_path: Path):
     assert n2 == 1
     assert len(db.open_segments(pid)) == 0
     db.close()
+
+
+def test_wrapped_paragraph_is_not_taken_as_chapter_subtitle():
+    wrapped = "CHAPTER I.\n\nThe quick brown fox jumps over\nthe lazy dog and keeps\nrunning for a long time.\n\nSecond paragraph."
+    (ch,) = chapters_from_text(wrapped)
+    assert ch.title == "CHAPTER I." and ch.paragraphs[0].startswith("The quick brown fox jumps over the lazy dog")
+    (ch,) = chapters_from_text("CHAPTER II.\n\nTHE PERIOD\n\nIt was a long time ago.")  # a real subtitle line still joins the title
+    assert ch.title == "CHAPTER II. THE PERIOD" and ch.paragraphs == ["It was a long time ago."]
+    (ch,) = chapters_from_text("第三回\n贾雨村夤缘复旧职\n\n却说黛玉。")
+    assert ch.title == "第三回 贾雨村夤缘复旧职"

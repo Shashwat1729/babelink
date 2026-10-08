@@ -3,9 +3,11 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "storytranslate"
+name = "lorebridge"
 version = "0.1.0"
-description = "Context-aware, consistent, multilingual long-form story translation"
+description = "Context-aware translation for web novels, EPUBs and manhua: one memory of names, tone and plot across every chapter"
+readme = "README.md"
+keywords = ["translation", "web-novel", "epub", "manhua", "manga", "ocr", "llm", "ollama", "glossary"]
 requires-python = ">=3.11"
 dependencies = [
   "ebooklib>=0.18",
@@ -16,11 +18,19 @@ dependencies = [
   "httpx>=0.27",
 ]
 
+[project.optional-dependencies]
+web = ["fastapi>=0.110", "uvicorn>=0.29", "python-multipart>=0.0.9"]
+images = ["rapidocr-onnxruntime>=1.3", "opencv-python-headless>=4.8", "numpy>=1.24", "Pillow>=10"]
+dev = ["pytest>=8", "httpx>=0.27"]
+
 [project.scripts]
-storytranslate = "storytranslate.cli:main"
+lorebridge = "lorebridge.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+lorebridge = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

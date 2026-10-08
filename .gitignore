@@ -16,3 +16,6 @@ leaderboard.md
 *.db
 *.db-wal
 *.db-shm
+corpus/
+eval_runs/
+.playwright-mcp/

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Lorebridge</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23B4382A'/%3E%3Ctext x='16' y='25' font-size='22' text-anchor='middle' fill='white'%3E%E8%AF%91%3C/text%3E%3C/svg%3E">
+<script>
+// apply the saved look before first paint (no flash of the wrong theme)
+try { const p = JSON.parse(localStorage.getItem("st-look") || "{}"), r = document.documentElement;
+  if (p.theme === "light" || p.theme === "dark") r.dataset.theme = p.theme;
+  if (p.accent) r.dataset.accent = p.accent; } catch (e) { /* storage blocked */ }
+</script>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<a class="skip" href="#app">Skip to content</a>
+
+<header class="topbar">
+  <a class="brand" href="#/" aria-label="Lorebridge, library"><span class="logo" aria-hidden="true">译</span><span class="brand-name">Lorebridge</span></a>
+  <nav class="crumbs" id="crumbs" aria-label="Breadcrumb"></nav>
+  <span class="grow"></span>
+  <button class="model-chip" id="model-chip" type="button" aria-haspopup="dialog" title="Choose the translation model"><span class="dot" id="model-dot"></span><span id="model-text">Checking model…</span></button>
+  <div class="pop-wrap">
+    <button class="icon-btn" id="look-btn" type="button" aria-label="Appearance" aria-expanded="false" aria-controls="look-pop"></button>
+    <div class="popover" id="look-pop" hidden>
+      <div class="pop-title">Theme</div>
+      <div class="seg-ctl" id="theme-ctl" role="radiogroup" aria-label="Theme"></div>
+      <div class="pop-title">Accent colour</div>
+      <div class="swatches" id="accent-ctl" role="radiogroup" aria-label="Accent colour"></div>
+    </div>
+  </div>
+</header>
+
+<main id="app" class="app" tabindex="-1"></main>
+
+<dialog id="dlg-work" aria-labelledby="dlg-work-title">
+  <form method="dialog" class="dlg" id="form-work">
+    <div>
+      <h2 id="dlg-work-title" class="serif">New work</h2>
+      <p class="muted small">A work is one novel or series. It keeps its own names, notes and translation memory, so every chapter you add stays consistent with the last.</p>
+    </div>
+    <label>Title of the work<input name="name" required maxlength="120" autocomplete="off" placeholder="e.g. Dream of the Red Chamber"></label>
+    <label class="drop compact" id="work-drop"><input type="file" name="file" accept=".epub,.txt,.html,.htm,.xhtml,.md,.png,.jpg,.jpeg,.webp,.bmp,.cbz,.zip" class="sr-only">
+      <span class="drop-title" id="work-drop-title">Add the book now (optional)</span>
+      <span class="muted small" id="work-drop-sub">Drop an EPUB or comic pages here, or click to choose. You can also add them later.</span></label>
+    <div class="row2">
+      <label>Language of the book<select name="source_lang" id="lang-source"></select></label>
+      <label>Translate into<select name="target_lang" id="lang-target"></select></label>
+    </div>
+    <label>Style<select name="style" id="style-new"></select><span class="hint" id="style-new-hint"></span></label>
+    <div class="dlg-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="submit" id="work-submit">Create work</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-paste" class="wide" aria-labelledby="dlg-paste-title">
+  <form method="dialog" class="dlg" id="form-paste">
+    <div>
+      <div class="eyebrow" id="paste-eyebrow"></div>
+      <h2 id="dlg-paste-title" class="serif big">Paste a chapter</h2>
+      <p class="muted">The text joins this work, so it reuses the names, Story Bible and translation memory built from earlier chapters. Nothing starts over.</p>
+    </div>
+    <div class="paste-grid">
+      <div class="stack">
+        <label>Chapter title<input name="title" maxlength="200" class="cjk" autocomplete="off"></label>
+        <label>Text<textarea name="text" rows="12" required class="cjk big-text" id="paste-text"></textarea></label>
+        <div class="actions">
+          <button class="btn primary" type="submit" value="translate">Add and translate</button>
+          <button class="btn" type="submit" value="analyze">Add only</button>
+          <button class="btn ghost" type="button" data-close>Cancel</button>
+          <span class="muted small" id="paste-count"></span>
+        </div>
+      </div>
+      <div class="card carried" id="carried"></div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-model" class="wide" aria-labelledby="dlg-model-title">
+  <form method="dialog" class="dlg" id="form-model">
+    <div>
+      <h2 id="dlg-model-title" class="serif">Translation model</h2>
+      <p class="muted small">The model does the translating. Pick where it runs, then choose one. Your choice is remembered in this browser.</p>
+    </div>
+    <div id="model-body" class="stack"></div>
+    <div class="dlg-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="submit">Use this model</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-bible" aria-labelledby="dlg-bible-title">
+  <form method="dialog" class="dlg" id="form-bible">
+    <h2 id="dlg-bible-title" class="serif">Story Bible entry</h2>
+    <div class="row2">
+      <label>Section<select name="section" id="bible-section"></select></label>
+      <label>Name in the book<input name="source" required maxlength="200" class="cjk" autocomplete="off"></label>
+    </div>
+    <label>Translation<input name="translation" maxlength="200" autocomplete="off"></label>
+    <div class="row2">
+      <label>Gender<select name="gender"><option value="">Not set</option><option>male</option><option>female</option><option>non-binary</option><option>plural</option></select></label>
+      <label>Pronouns<input name="pronouns" maxlength="60" placeholder="he/him" autocomplete="off"></label>
+    </div>
+    <label>Notes for the translator<textarea name="notes" rows="3" maxlength="500" placeholder="Role, relationships, how others address them…"></textarea></label>
+    <div class="dlg-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="submit">Save</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-context" class="wide" aria-labelledby="dlg-context-title">
+  <div class="dlg">
+    <h2 id="dlg-context-title" class="serif">What this paragraph used</h2>
+    <div id="context-body" class="stack"></div>
+    <div class="dlg-actions"><button class="btn primary" type="button" data-close>Close</button></div>
+  </div>
+</dialog>
+
+<dialog id="dlg-confirm" aria-labelledby="confirm-title">
+  <form method="dialog" class="dlg" id="form-confirm">
+    <h2 id="confirm-title" class="serif"></h2>
+    <div id="confirm-body" class="stack"></div>
+    <div class="dlg-actions"><button class="btn" type="button" data-close id="confirm-cancel">Cancel</button><button class="btn primary" type="submit" id="confirm-ok">OK</button></div>
+  </form>
+</dialog>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

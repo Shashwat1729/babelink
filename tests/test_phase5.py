@@ -1,9 +1,9 @@
 import json
 from pathlib import Path
 
-from storytranslate.datasets import LocalFileAdapter
-from storytranslate.eval import run_benchmark, write_leaderboard
-from storytranslate.providers.base import MockProvider
+from lorebridge.datasets import LocalFileAdapter
+from lorebridge.eval import run_benchmark, write_leaderboard
+from lorebridge.providers.base import MockProvider
 
 
 def test_local_adapter_and_eval(tmp_path: Path):

@@ -1,11 +1,11 @@
 from pathlib import Path
 
-from storytranslate.db import Database
-from storytranslate.importers import import_txt
-from storytranslate.pipeline import analyze_project, translate_project
-from storytranslate.providers.base import MockProvider
-from storytranslate.refinement import guardrail_ok, mark_stale_by_term, run_refinement
-from storytranslate.models import SegmentState
+from lorebridge.db import Database
+from lorebridge.importers import import_txt
+from lorebridge.pipeline import analyze_project, translate_project
+from lorebridge.providers.base import MockProvider
+from lorebridge.refinement import guardrail_ok, mark_stale_by_term, run_refinement
+from lorebridge.models import SegmentState
 
 
 def _setup(tmp_path: Path):

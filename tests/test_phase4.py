@@ -1,6 +1,6 @@
-from storytranslate.registry import recommend
-from storytranslate.benchmark import benchmark
-from storytranslate.providers.base import MockProvider
+from lorebridge.registry import recommend
+from lorebridge.benchmark import benchmark
+from lorebridge.providers.base import MockProvider
 
 
 def test_recommend_filters_language():

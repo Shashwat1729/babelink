@@ -1,5 +1,5 @@
-from storytranslate.escalation import escalation_needed
-from storytranslate.failure_corpus import add_case, load_cases
+from lorebridge.escalation import escalation_needed
+from lorebridge.failure_corpus import add_case, load_cases
 
 
 def test_escalation_signals():
