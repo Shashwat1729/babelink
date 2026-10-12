@@ -4,7 +4,8 @@ Flow: import_images() runs OCR and stores each text block as a segment (so names
 Story Bible apply exactly as for prose) plus its pixel box in `regions`. render_page() erases the original text and
 typesets the translation into the same bubble; export_pages() bundles every page as a CBZ.
 
-OCR is RapidOCR (PP-OCR models on ONNX Runtime, CPU, Chinese + English). Japanese/Korean pages need another recognizer.
+OCR is RapidOCR (PP-OCR models on ONNX Runtime, CPU, Chinese + English); Korean pages use a Korean rec model
+from LOREBRIDGE_OCR_MODELS when present. Japanese pages still need another recognizer.
 """
 from __future__ import annotations
 
@@ -49,30 +50,59 @@ def _deps():
 
 
 # ---- OCR ----------------------------------------------------------------------------------------------
-_engine = None
+# Recognition models beyond Chinese+English live outside the repo (C: is small
+# on dev machines): LOREBRIDGE_OCR_MODELS points at a folder holding e.g.
+# korean_mobile_v2.0_rec_infer.onnx + korean_dict.txt. Missing files fail soft
+# back to the default engine — a page is never refused for its script.
+_OCR_MODEL_DIR = Path(os.environ.get("LOREBRIDGE_OCR_MODELS", r"D:\StoryTranslation_data\ocr_models"))
+_engines: dict[str, object] = {}
 
 
-def _ocr_engine():
-    global _engine
-    if _engine is None:
+def _korean_config() -> str | None:
+    rec = _OCR_MODEL_DIR / "korean_mobile_v2.0_rec_infer.onnx"
+    keys = _OCR_MODEL_DIR / "korean_dict.txt"
+    if not (rec.is_file() and keys.is_file()):
+        return None
+    import rapidocr_onnxruntime
+    pkg = Path(rapidocr_onnxruntime.__file__).parent
+    text = (pkg / "config.yaml").read_text(encoding="utf-8")
+    for name in ("ch_PP-OCRv4_det_infer.onnx", "ch_PP-OCRv4_rec_infer.onnx",
+                 "ch_ppocr_mobile_v2.0_cls_infer.onnx"):
+        text = text.replace(f"models/{name}", (pkg / "models" / name).as_posix())
+    text = text.replace((pkg / "models" / "ch_PP-OCRv4_rec_infer.onnx").as_posix(), rec.as_posix())
+    text += f"\n    rec_keys_path: {keys.as_posix()}\n"
+    out = _OCR_MODEL_DIR / "rapidocr_ko.yaml"
+    out.write_text(text, encoding="utf-8")
+    return str(out)
+
+
+def _ocr_engine(lang: str = ""):
+    """Per-script recognition: Korean pages get the Korean rec model (same
+    detector), everything else the bundled Chinese+English engine."""
+    key = "ko" if lang == "ko" else "default"
+    if key not in _engines:
         try:
             from rapidocr_onnxruntime import RapidOCR
         except ImportError as e:  # pragma: no cover
             raise RuntimeError("image support needs: pip install 'lorebridge[images]'") from e
-        _engine = RapidOCR()
-    return _engine
+        if key == "ko":
+            cfg = _korean_config()
+            _engines[key] = RapidOCR(config_path=cfg) if cfg else RapidOCR()
+        else:
+            _engines[key] = RapidOCR()
+    return _engines[key]
 
 
-def ocr_lines(img) -> list[tuple[list[list[int]], str, float]]:
+def ocr_lines(img, lang: str = "") -> list[tuple[list[list[int]], str, float]]:
     """(quad, text, score) per detected text line. Tall webtoon strips are cut into overlapping tiles first, because the
-    detector downsizes its input and would otherwise lose small lettering."""
+    detector downsizes its input and would otherwise lose small lettering. `lang='ko'` uses the Korean rec model."""
     h, w = img.shape[:2]
     tile = max(int(w * 1.4), 600)
     step = int(tile * 0.88)
     found: list[tuple[list[list[int]], str, float]] = []
     for y0 in range(0, max(h - int(tile * 0.12), 1), step) if h > tile * 1.25 else [0]:
         y1 = min(y0 + tile, h) if h > tile * 1.25 else h
-        res, _ = _ocr_engine()(img[y0:y1])
+        res, _ = _ocr_engine(lang)(img[y0:y1])
         for quad, text, score in res or []:
             quad = [[int(p[0]), int(p[1]) + y0] for p in quad]
             cy = sum(p[1] for p in quad) / 4
@@ -142,8 +172,8 @@ def read_image(data: bytes | str | Path):
     return img
 
 
-def detect_blocks(img, min_score: float = 0.5) -> list[Block]:
-    return group_blocks([ln for ln in ocr_lines(img) if ln[2] >= min_score])
+def detect_blocks(img, min_score: float = 0.5, lang: str = "") -> list[Block]:
+    return group_blocks([ln for ln in ocr_lines(img, lang) if ln[2] >= min_score])
 
 
 # ---- import ------------------------------------------------------------------------------------------
@@ -168,13 +198,21 @@ def _page_files(path: Path, store: Path) -> list[Path]:
     return pages
 
 
-def import_images(db: Database, project_id: int, path: str | Path, *, detect=detect_blocks, on_progress=None,
+def import_images(db: Database, project_id: int, path: str | Path, *, detect=None, on_progress=None,
                   should_stop=lambda: False, title: str | None = None) -> int:
     """One chapter per page; each OCR block becomes a segment with its box. `title` overrides the file name stem
-    (the web layer stores uploads under a prefixed name). Returns pages added."""
+    (the web layer stores uploads under a prefixed name). The project's source language picks the OCR script
+    (Korean pages use the Korean rec model when its files are present). Returns pages added."""
     path = Path(path)
     name = title or path.stem
     _deps()
+    lang = ""
+    try:
+        lang = db.get_project(project_id).get("source_lang") or ""
+    except Exception:
+        lang = ""
+    if detect is None:
+        detect = (lambda img: detect_blocks(img, lang="ko")) if lang == "ko" else detect_blocks
     base = db.conn.execute("SELECT COALESCE(MAX(order_index), -1) + 1 AS b FROM chapters WHERE project_id=?", (project_id,)).fetchone()["b"]
     store = db.path.parent / "pages" / str(project_id)
     store.mkdir(parents=True, exist_ok=True)

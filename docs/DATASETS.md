@@ -60,7 +60,19 @@ sample twice — once as a direct `provider.translate()` call, once through the
 full pipeline — and reports chrF++ plus term adherence for both, so the report
 shows what the model does versus what the harness adds.
 
-## Next datasets (researched, none downloaded or wired in yet)
+## Comic-page evaluation (images stay on D:, never committed)
+
+| Source | Status | Notes |
+|---|---|---|
+| MangaDex API (Martial Peak ch.1 EN) | fetched 2 pages | clean JSON API + direct image CDN; the real-page loop proof |
+| MangaDex zh / zh-hk (same title) | none exist | licensed title — no Chinese scanlations hosted at all |
+| Comick.io API search | endpoint shape changed (404) | would need re-discovery; deprioritized after MangaDex worked |
+| Baozimh web search | 403 bot wall | app-endpoint pattern known but gated; needs session handling |
+| Nano Machine Korean raws (manhwa18x-class sites) | not attempted after walls | unblocked on the OCR side now — needs raw acquisition only |
+
+Protocol for your own raws: drop page images in a folder, import as a `ko`/`zh` project,
+translate, export CBZ; score OCR blocks against a manual transcript and translations
+against the licensed/fan text with `scripts/eval_harness_vs_bare.py`-style bubble pairing.
 
 All of these are in `lorebridge datasets` with their licence fields; none is redistributed by this repository. Licence statements come from
 the linked paper or dataset page when the research was done (2026-10-07). Check the current terms before downloading.

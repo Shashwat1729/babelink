@@ -223,6 +223,23 @@ helper `huihui_ai/qwen3-abliterated:4b` (4k ctx — 8k OOMs, see REGRESSIONS.md)
   VERDICT: refine is safe polish, not a quality lever — keep opt-in, never in
   the scored pipeline by default.
 
+## E18 — Comics on real pages (Korean OCR + real-page loop)
+
+- Korean OCR with zero new packages: bundled RapidOCR takes a config
+  override, so only weights were fetched to D: (official Korean PP-OCR rec
+  3.3MB + dict). `images.py` picks the rec model per project language.
+  Control: default engine reads 1 garbage line on Korean text; ko finds all
+  4 content lines — but PP-OCRv1-mobile misreads ~1 syllable in 4
+  (돌아왔다→아왔다). Regression test pins detection + clean phrases and names
+  the weakness; upgrade = newer ko rec weights, not code.
+- Real-page loop proven on a genuine Martial Peak scanlation page (MangaDex,
+  EN): 7 blocks OCR'd in 4s, Hy-MT2 en→zh 7/7 in 33s, typeset back onto the
+  page. Title renders 武境峰 (unknown-name transliteration — the names-review
+  step exists for exactly this). Eval images stay on D:, never committed.
+- NOT done: same-chapter ZH raw (MangaDex hosts no Chinese for this title;
+  Baozimh/Comick bot-walled) and Korean raws (Nano Machine blocked on
+  acquisition, not OCR anymore). Fetch protocol documented in DATASETS.
+
 - zh got kMandarin DP alignment; ja kanji names had NO phonetic check (the
   pinyin clause even misfired on romaji-shaped renderings — fixed by scoping
   each clause to its source_lang). Vendored `romaji_table.py` (13,395 kanji).

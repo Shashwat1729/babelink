@@ -7,7 +7,7 @@ What the spec describes but this repository does not do, and why. Nothing here i
 | Spec area | State | Reason / what is there instead |
 |---|---|---|
 | Desktop app (PySide6, §74) | not built | A local web UI covers the same workflow (ADR-009). No GUI toolkit dependency. |
-| Manga / manhua pipeline (§69, phase 6) | partly built (`images.py`, `[images]` extra) | OCR, bubble grouping, erase and typeset work for Chinese and English lettering on horizontal text. Not built: Japanese/Korean OCR, vertical text, right-to-left order, speaker detection, model inpainting, panel detection. |
+| Manga / manhua pipeline (§69, phase 6) | partly built (`images.py`, `[images]` extra) | OCR, bubble grouping, erase and typeset work for Chinese, English and (since E18) Korean lettering on horizontal text — Korean via external weights (`LOREBRIDGE_OCR_MODELS`), v1-mobile quality (~1 syllable in 4 misread). Proven on a real scanlation page (7/7 blocks, en→zh, 33s). Not built: Japanese OCR, vertical text, right-to-left order, speaker detection, model inpainting, panel detection. |
 | DOCX import/export (§70, §78) | not built | EPUB, TXT, HTML and pasted text cover the target use. |
 | Vector / semantic retrieval for TM and context (§21, §73, §80) | not built | Retrieval is exact TM + entity overlap + recency + summaries, inside a size budget. Add an embedding index only if evaluation shows misses. |
 | LLM entity extraction and relationship / timeline graph (§11) | not built | Entities are entered by the user or come from mined terms; model-suggested renderings exist for terms, not for relationships. |
@@ -17,10 +17,10 @@ What the spec describes but this repository does not do, and why. Nothing here i
 
 ## Comic pages: known limits
 
-- OCR models read Chinese and English. Japanese and Korean text is missed or misread, and the OCR is not tuned for hand lettering, sound effects or stylised fonts.
+- OCR models read Chinese, English and Korean (v1-mobile quality); Japanese text is missed or misread, and no OCR here is tuned for hand lettering, sound effects or stylised fonts. Korean page-level proof on real raws waits on raw acquisition (E18).
 - Lettering on busy art is removed by classic inpainting (OpenCV). Expect smudges there; flat white bubbles come out clean.
 - Typesetting uses one system font per target script and fits the text to the bubble. It does not copy the original font, rotation, outline or bubble tails.
-- The pipeline is tested on generated pages. It has not been scored on a manga benchmark or on real copyrighted pages (see [DATASETS.md](DATASETS.md) for the plan).
+- The pipeline is tested on generated pages and one real scanlation page (E18). It has not been scored on a manga benchmark (see [DATASETS.md](DATASETS.md) for the plan).
 - Term mining needs a name to repeat three times, so a short comic with few pages gets little glossary help. Fix names by hand on the Names tab.
 
 ## Limits of the evidence

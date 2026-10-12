@@ -182,6 +182,44 @@ def test_web_pages_end_to_end_with_real_ocr(client, tmp_path):
     assert client.delete(f"/api/projects/{pid}", headers=H).status_code == 200
 
 
+def _korean_model_files():
+    import os
+    d = Path(os.environ.get("LOREBRIDGE_OCR_MODELS", r"D:\StoryTranslation_data\ocr_models"))
+    rec, keys = d / "korean_mobile_v2.0_rec_infer.onnx", d / "korean_dict.txt"
+    return (rec, keys) if rec.is_file() and keys.is_file() else None
+
+
+def test_korean_ocr_finds_lines_where_default_finds_none(tmp_path):
+    """Korean pages use the Korean rec model (weights on D:, not pip): the
+    default engine reads near-nothing on Korean text, the ko engine finds
+    every content line (syllable confusions allowed — detection is the bar)."""
+    pytest.importorskip("rapidocr_onnxruntime")
+    if _korean_model_files() is None:
+        pytest.skip("no Korean OCR weights (LOREBRIDGE_OCR_MODELS)")
+    from PIL import Image, ImageDraw, ImageFont
+    try:
+        font = ImageFont.truetype(r"C:\Windows\Fonts\malgun.ttf", 44)
+    except OSError:
+        pytest.skip("no Korean font on this machine")
+    from lorebridge.images import detect_blocks
+    img = Image.new("RGB", (700, 340), "white")
+    d = ImageDraw.Draw(img)
+    for i, t in enumerate(["나노 머신이 깨어났다", "천마가 돌아왔다", "빨리 도망쳐!", "사형, 조심하세요"]):
+        d.text((40, 30 + i * 75), t, font=font, fill="black")
+    p = tmp_path / "ko.png"
+    img.save(p)
+    import cv2
+    cv = cv2.imread(str(p))
+    assert len(detect_blocks(cv)) <= 1  # control: default engine is blind here
+    from lorebridge.images import ocr_lines
+    lines = [t for _, t, s in ocr_lines(cv, lang="ko") if s >= 0.5]
+    joined = " ".join(lines)
+    # detection bar (all 4 content lines surface) + the phrases the v1 mobile
+    # model reads cleanly; its syllable confusions (돌아왔다→아왔다) are a
+    # documented weakness, fixed by a newer ko rec model, not by code.
+    assert len(lines) >= 4 and "깨어났다" in joined and "도망" in joined, joined
+
+
 def test_source_fix_refused_for_text_chapters(client):
     pid = client.post("/api/projects", json={"name": "Novel"}, headers=H).json()["id"]
     client.post(f"/api/projects/{pid}/paste", json={"text": "林凡走进青云宗。", "title": "一"}, headers=H)

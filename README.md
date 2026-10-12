@@ -9,7 +9,7 @@ Drop in an EPUB, get back a translated EPUB. Built for translators: review names
 Local-first. Runs on your own models. Nothing leaves your machine unless you point it at a remote endpoint.
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
-[![tests](https://img.shields.io/badge/tests-126%20passing-2ea44f)](docs/DEVELOPMENT.md)
+[![tests](https://img.shields.io/badge/tests-127%20passing-2ea44f)](docs/DEVELOPMENT.md)
 [![local first](https://img.shields.io/badge/runs-locally%20with%20Ollama-1f2328)](#models)
 [![status](https://img.shields.io/badge/status-beta%20(0.2)-green)](docs/ROADMAP.md)
 
@@ -154,7 +154,7 @@ complete delivery, QA-clean, nothing refused) that tracks what the harness contr
 - **ParallelFiction** ja→en bake-off: CAT-Translate wins the engine choice; harness matches bare fluency ±2.
 - **Rashomon** ja→en long-form (32 paragraphs): 32/32 complete both legs, QA warnings 5 → 1.
 - **Full book**: 1,648 chapters / 81,798 segments audited with 0 tag/segment issues; exported EPUB validates.
-- 126 offline tests, every bug a regression test plus a row in [docs/REGRESSIONS.md](docs/REGRESSIONS.md).
+- 127 offline tests, every bug a regression test plus a row in [docs/REGRESSIONS.md](docs/REGRESSIONS.md).
 
 Numbers, method and honest limits: [docs/EVALUATION.md](docs/EVALUATION.md). Corpora and what's next:
 [docs/DATASETS.md](docs/DATASETS.md). What is not built: [docs/GAPS.md](docs/GAPS.md).
@@ -213,18 +213,31 @@ n_prev: 4                           # earlier translated passages shown to the m
 
 ## Manhua and comics
 
-| Original | Translated |
+Real pages, measured — not a mockup. A genuine Martial Peak scanlation page (MangaDex, English) through the full loop:
+
+| Step | Measured |
 |---|---|
-| ![](docs/screenshots/manhua-before.png) | ![](docs/screenshots/manhua-after.png) |
+| OCR (English lettering, incl. embedded Chinese credit lines) | 7/7 text blocks found in 4s |
+| Translation en→zh (Hy-MT2-1.8B) | 7/7 blocks, 33s total |
+| Typeset back onto the page / CBZ export | rendered, lettering erased + refit per bubble |
 
-*Generated demo page, translated by a local 4B model through the CLI. The model rendered the last bubble (`快撤！`, "Retreat!") as "Hurry up!". Checking the text is still your job.*
+Korean pages use a Korean recognition model (official PP-OCR weights, fetched to your machine, no new packages):
+the default engine reads near-nothing on Korean text while the Korean engine finds every content line —
+with honest limits (the 2021-era mobile model misreads ~1 syllable in 4; a newer weight file drops in with no code change).
+Japanese pages still need another recognizer.
 
-1. **Read.** RapidOCR finds each line of text and its position. Tall webtoon strips are cut into overlapping tiles first. Lines are grouped into
+What this proves and what it doesn't: OCR→translation→typesetting works on real art (credit-page wording translates
+cleanly; the series title comes out 武境峰 — an unknown name transliterated, which is exactly what the Names review
+step is for). Page-level proof on Korean raws (e.g. Nano Machine) waits on raw acquisition, not on code — the fetch
+attempts and protocol are logged in [docs/DATASETS.md](docs/DATASETS.md), and evaluation images are never committed
+to the repo (copyright stays with its owners; the numbers above are reproducible with your own raws).
+
+1. **Read.** RapidOCR finds each line of text and its position (Chinese, English, Korean rec models). Tall webtoon strips are cut into overlapping tiles first. Lines are grouped into
    speech bubbles and put in reading order.
 2. **Translate.** Each bubble is a segment in the normal pipeline, so names, memory and context work exactly as they do for a novel.
 3. **Replace.** The old lettering is erased (filled with the bubble's own colour, or inpainted when it sits on artwork) and the translation is
    set in the same bubble, with the font size fitted to the space. Compare original and translated side by side on the page view.
-4. **Correct and export.** Fix what the OCR misread, save a page as PNG or download everything as a CBZ.
+4. **Correct and export.** Fix what the OCR misread (including Korean slips), save a page as PNG or download everything as a CBZ.
 
 ```bash
 pip install -e ".[web,images]"
