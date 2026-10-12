@@ -9,7 +9,7 @@ Drop in an EPUB, get back a translated EPUB. Built for translators: review names
 Local-first. Runs on your own models. Nothing leaves your machine unless you point it at a remote endpoint.
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
-[![tests](https://img.shields.io/badge/tests-127%20passing-2ea44f)](docs/DEVELOPMENT.md)
+[![tests](https://img.shields.io/badge/tests-128%20passing-2ea44f)](docs/DEVELOPMENT.md)
 [![local first](https://img.shields.io/badge/runs-locally%20with%20Ollama-1f2328)](#models)
 [![status](https://img.shields.io/badge/status-beta%20(0.2)-green)](docs/ROADMAP.md)
 
@@ -79,7 +79,8 @@ Translating a chapter is three clicks. Proofreading it is the actual job, so the
 | Japanese light novel (ja→zh) | OpenSakura, gold glossary | Hy-MT2-1.8B | 9/9 terms vs 1/9 bare |
 | Japanese classic (ja→en) | Rashōmon, 32 paras | CAT-Translate-1.4B | 32/32 complete, QA 5→1 |
 | Chinese manhua page (zh→en) | Martial Peak scanlation page | OCR + Hy-MT2 | 7/7 blocks, 33s, typeset |
-| Korean manhwa (ko→en) | Nano Machine | OCR + Hy-MT2 | engine proven (ko→en smoke ✓); page loop waits on story-page raws — aggregators serve covers statically, chapters render in JS |
+| Korean manhwa (en→zh) | Nano Machine ch.1 story pages (photo above) | OCR + Hy-MT2 | 11/11 blocks, 29s, typeset; fragment-echo bug found + fixed on these pages |
+| Korean manhwa (ko→en) | Nano Machine | OCR + Hy-MT2 | ko→en engine proven; KO story raws JS-walled (covers fetched, lettering too stylized for v1 OCR) |
 | Japanese manga (ja→en) | One Piece class | — | blocked on Japanese OCR (no usable open weights; same per-script slot as Korean, ready to fill) |
 
 Direction-aware default (`--provider auto`) picks the engine; every other direction falls back to Hy-MT2,
@@ -169,7 +170,7 @@ complete delivery, QA-clean, nothing refused) that tracks what the harness contr
 - **ParallelFiction** ja→en bake-off: CAT-Translate wins the engine choice; harness matches bare fluency ±2.
 - **Rashomon** ja→en long-form (32 paragraphs): 32/32 complete both legs, QA warnings 5 → 1.
 - **Full book**: 1,648 chapters / 81,798 segments audited with 0 tag/segment issues; exported EPUB validates.
-- 127 offline tests, every bug a regression test plus a row in [docs/REGRESSIONS.md](docs/REGRESSIONS.md).
+- 128 offline tests, every bug a regression test plus a row in [docs/REGRESSIONS.md](docs/REGRESSIONS.md).
 
 Numbers, method and honest limits: [docs/EVALUATION.md](docs/EVALUATION.md). Corpora and what's next:
 [docs/DATASETS.md](docs/DATASETS.md). What is not built: [docs/GAPS.md](docs/GAPS.md).
@@ -228,12 +229,17 @@ n_prev: 4                           # earlier translated passages shown to the m
 
 ## Manhua and comics
 
-Real pages, measured — not a mockup. A genuine Martial Peak scanlation page (MangaDex, English) through the full loop:
+Real pages, measured — not a mockup. Nano Machine ch.1 (Asura Scans English) through the full loop,
+raw page left, our Chinese typeset page right (downscaled crops; art © Hanjung Worya / Geumgang Bulgoe):
+
+| Raw page | Our translation |
+|---|---|
+| ![](docs/screenshots/nm-raw-crop.png) | ![](docs/screenshots/nm-ours-crop.png) |
 
 | Step | Measured |
 |---|---|
-| OCR (English lettering, incl. embedded Chinese credit lines) | 7/7 text blocks found in 4s |
-| Translation en→zh (Hy-MT2-1.8B) | 7/7 blocks, 33s total |
+| OCR (2 real story pages, webtoon art) | 11/11 dialogue blocks found |
+| Translation en→zh (Hy-MT2-1.8B) | 11/11 blocks, 29s total |
 | Typeset back onto the page / CBZ export | rendered, lettering erased + refit per bubble |
 
 Korean pages use a Korean recognition model (official PP-OCR weights, fetched to your machine, no new packages):

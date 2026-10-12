@@ -51,6 +51,10 @@ def clean_output(text: str) -> str:
     text = re.sub(r"^```\w*\n|\n```$", "", text).strip()
     text = re.sub(r"(</s>|<\|.+?\|>)\s*$", "", text).strip()  # stray EOS tokens (sarashina </s>, hymt markers)
     text = re.sub(r"^\[(?:Translation|译文|翻译)[^\]]*\]\s*", "", text, flags=re.IGNORECASE).strip()  # '[Translation]' preface (DG17: wasted tokens, truncated names)
+    m = re.search(r"\[来源文本\]|\(来源文本\)|来源文本[:：]", text)  # Nano Machine: fragmentary screams make Hy-MT2 echo
+    if m:  # the source with '=>' alignment notes ('该死！！ => ...') — keep the translation, drop the echo
+        text = text[:m.start()]
+        text = re.split(r"\s*=>", text, maxsplit=1)[0]
     return _LABEL.sub("", text).strip()
 
 

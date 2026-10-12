@@ -77,6 +77,17 @@ def test_clean_output_strips_stray_eos():
     assert clean_output("Hello") == "Hello"
 
 
+def test_clean_output_strips_source_echo_dump():
+    """Nano Machine: 'DAMN IT ALL...' made Hy-MT2 echo the source with '=>'
+    alignment notes and a [来源文本] marker. The shipped text keeps only the
+    translation; a legit '=>' with no echo marker is left alone."""
+    from lorebridge.prompts import clean_output
+    monster = ("该死！！ => 真他妈糟糕！！\n我无法移动……我的腿也动不了了……！ => 我无法移动……我的腿也动不了了……！"
+               "[来源文本]\n该死的……")
+    assert clean_output(monster) == "该死！！"
+    assert clean_output("a => b") == "a => b"
+
+
 def test_helper_for_routes_mt_tasks_to_general_llm():
     mt = service.make_provider("hymt", DEFAULT_MODEL)
     helper = service.helper_for(mt, "hymt", "", "some-helper:4b")

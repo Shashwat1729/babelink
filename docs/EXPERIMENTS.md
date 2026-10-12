@@ -232,10 +232,14 @@ helper `huihui_ai/qwen3-abliterated:4b` (4k ctx — 8k OOMs, see REGRESSIONS.md)
   4 content lines — but PP-OCRv1-mobile misreads ~1 syllable in 4
   (돌아왔다→아왔다). Regression test pins detection + clean phrases and names
   the weakness; upgrade = newer ko rec weights, not code.
-- Real-page loop proven on a genuine Martial Peak scanlation page (MangaDex,
-  EN): 7 blocks OCR'd in 4s, Hy-MT2 en→zh 7/7 in 33s, typeset back onto the
-  page. Title renders 武境峰 (unknown-name transliteration — the names-review
-  step exists for exactly this). Eval images stay on D:, never committed.
+- Real story pages won via Asura (static HTML, no wall): Nano Machine ch.1
+  EN pp.2–3, 11/11 dialogue blocks OCR'd off webtoon art (spacing slips like
+  MYLEG kept — real lettering). The pages caught a live bug: fragmentary
+  screams ('DAMN IT ALL...') make Hy-MT2 echo the source with '=>' notes and
+  a [来源文本] marker (100-char dump into one bubble). Fixed in
+  `clean_output` (echo-marker strip, legit '=>' untouched) + regression test
+  with the exact string; re-run on the same pages stores 该死！！. README now
+  shows downscaled credited crops (raw | ours), not mockups.
 - NOT done: same-chapter ZH raw (MangaDex hosts no Chinese for this title;
   Baozimh/Comick bot-walled) and Korean story pages (Nano Machine: covers
   fetch fine, chapters render in JS — needs Playwright or a manual drop).
