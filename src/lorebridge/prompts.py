@@ -49,6 +49,8 @@ def clean_output(text: str) -> str:
     text = re.sub(r"^<think>.*", "", text, flags=re.DOTALL | re.IGNORECASE)  # unterminated think block
     text = text.strip()
     text = re.sub(r"^```\w*\n|\n```$", "", text).strip()
+    text = re.sub(r"(</s>|<\|.+?\|>)\s*$", "", text).strip()  # stray EOS tokens (sarashina </s>, hymt markers)
+    text = re.sub(r"^\[(?:Translation|译文|翻译)[^\]]*\]\s*", "", text, flags=re.IGNORECASE).strip()  # '[Translation]' preface (DG17: wasted tokens, truncated names)
     return _LABEL.sub("", text).strip()
 
 
@@ -101,6 +103,9 @@ def refinement_prompt(source: str, draft: str, *, style: str = "", glossary=None
         "Do NOT change names, glossary terms, numbers, facts, speakers, or relationships; do not add or "
         "remove content. Fix awkward literal phrasing, rhythm, repetition and punctuation only. "
         "Output ONLY the improved translation.\n"
+        "If the passage hinges on wordplay, a cultural reference, or an ambiguous term an English reader "
+        "would misunderstand without help, you may append ONE line starting with 'NOTE: ' explaining it "
+        "briefly (one sentence). Otherwise output no NOTE line at all.\n"
         f"{_glossary_block(glossary, source)}\n[Source]\n{source}\n\n[Draft]\n{draft}"
     )
     return SYSTEM, user
@@ -120,12 +125,17 @@ def terms_prompt(items: list[tuple[str, str]], source_lang: str = "zh", target_l
     return ("You are a terminologist for fiction translation.",
             f"These {src} strings recur in a novel. Keep ONLY real proper nouns / fixed terms: character names, "
             "places, organizations, titles, ranks, cultivation realms, techniques, items. Drop ordinary words, "
-            "sentence fragments and partial names.\n"
-            f"For each kept term give a canonical {tgt} rendering, capitalized like a proper noun (personal names: "
-            "pinyin/romanization with given name capitalized; places, organizations, ranks, realms, techniques, items: "
-            "Title Case). Omit anything that would be written in lower case.\n"
+            "sentence fragments and partial names. Always drop: numbers and time expressions (三日, 三年, 一日), "
+            "verbs of saying (曰, 道, 答曰, 笑曰, 怒曰 — these are just 'said'), plain directions and positions "
+            "(上來, 出門, 入室), and common verbs, adverbs or adjectives used in their ordinary sense.\n"
+            f"For each kept term give its natural {tgt} rendering: personal names in pinyin/romanization with the "
+            "given name capitalized; descriptive terms in natural casing (lower case when they are ordinary words). "
+            "Do NOT force Title Case — a lower-case rendering tells the pipeline the term needs no enforcement.\n"
+            'For each term also judge "enforce": true ONLY if this exact rendering must appear in EVERY occurrence '
+            "(a name or fixed term a reader would never paraphrase); false for anything descriptive, approximate, "
+            "or context-dependent.\n"
             'Return ONLY a JSON array: [{"term": "...", "type": "character|location|organization|title|realm|'
-            'technique|item", "translation": "..."}].\n\n' + lines)
+            'technique|item", "translation": "...", "enforce": true}].\n\n' + lines)
 
 
 def summary_prompt(text: str, target_lang: str = "en") -> tuple[str, str]:

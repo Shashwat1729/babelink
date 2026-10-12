@@ -1,0 +1,14 @@
+# Hy-MT2-1.8B for Ollama with the exact official chat template
+# (tencent/Hy-MT2-1.8B chat_template.jinja, translated to Go template syntax).
+# Without this, Ollama sends prompts as raw text and the <｜hy_…｜> control
+# tokens get BPE-fragmented instead of mapping to their special-token IDs,
+# which produces degenerate output. Usage:
+#   ollama create hymt2-1.8b -f Modelfile.hymt2
+FROM hf.co/tencent/Hy-MT2-1.8B-GGUF:Q4_K_M
+TEMPLATE """<｜hy_begin▁of▁sentence｜>{{ if .System }}{{ .System }}<｜hy_place▁holder▁no▁3｜>{{ end }}{{ range .Messages }}{{ if eq .Role "user" }}<｜hy_User｜>{{ .Content }}{{ else if eq .Role "assistant" }}<｜hy_Assistant｜>{{ .Content }}<｜hy_place▁holder▁no▁2｜>{{ end }}{{ end }}<｜hy_Assistant｜>"""
+PARAMETER stop "<｜hy_place▁holder▁no▁2｜>"
+PARAMETER temperature 0.7
+PARAMETER top_p 0.6
+PARAMETER top_k 20
+PARAMETER repeat_penalty 1.05
+PARAMETER num_ctx 8192

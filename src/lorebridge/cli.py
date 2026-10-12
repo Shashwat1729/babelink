@@ -17,7 +17,8 @@ from .story_bible import project_root
 
 PROV = argparse.ArgumentParser(add_help=False)
 PROV.add_argument("--provider", choices=service.PROVIDERS, help="default: config file, else mock")
-PROV.add_argument("--model", help="default: config file (models.<command> or model), else qwen2.5:7b")
+PROV.add_argument("--model", help="default: config file (models.<command> or model), else Hy-MT2-1.8B")
+PROV.add_argument("--helper-model", help="general LLM for terms/refine/review/summaries when --model is translation-only (Hy-MT2)")
 PROV.add_argument("--base-url")
 
 
@@ -26,8 +27,39 @@ def _db(args) -> Database:
     return service.open_workspace(args.project_dir)
 
 
-def _provider(args):
-    return service.make_provider(args.provider, args.model, args.base_url)
+def _provider(args, source_lang: str = "", target_lang: str = "en"):
+    kind, model = args.provider, args.model
+    if kind == "auto":  # direction-aware default engine (evidence: bake-off E04, gold-glossary E07)
+        kind, auto_model = service.default_engine(source_lang, target_lang)
+        model = model or auto_model
+    return service.make_provider(kind, model, args.base_url)
+
+
+def _translator(args, main=None, source_lang: str = "", target_lang: str = "en"):
+    """Translation engine with failover (Hy-MT2, then the helper model
+    degraded). Eval/benchmark commands keep using _provider for single-model
+    purity; user-facing translate/retranslate go through the chain so one
+    dead model never aborts a book."""
+    from .fallback import resolve_chains
+
+    main = main if main is not None else _provider(args, source_lang, target_lang)
+
+    def make(kind, model="", base_url=""):
+        if kind == args.provider and (model or "") == (args.model or ""):
+            return main  # reuse the instance the helper was derived from
+        return service.make_provider(kind, model, base_url)
+
+    chain, _ = resolve_chains(args.provider, args.model, args.base_url,
+                              getattr(args, "helper_model", "") or "", make=make,
+                              source_lang=source_lang, target_lang=target_lang)
+    return chain
+
+
+def _helper(args, main=None):
+    """General-LLM helper for non-translation tasks. Same object as main for
+    general LLMs; a helper model when main is translation-only (Hy-MT2)."""
+    main = main if main is not None else _provider(args)
+    return service.helper_for(main, args.provider, args.base_url, getattr(args, "helper_model", "") or "")
 
 
 def _chapter_id(db: Database, pid: int, number):
@@ -90,6 +122,7 @@ def build_parser() -> argparse.ArgumentParser:
     ptr.add_argument("--summaries", action="store_true", default=None, help="Write a model summary after each finished chapter")
     ptr.add_argument("--n-prev", type=int, help="Previous translated passages shown to the model (default 3)")
     ptr.add_argument("--escalate-model", help="Stronger Ollama model for risky segments (spec §10)")
+    ptr.add_argument("--candidates", type=int, default=1, help="Model draws per paragraph; the deterministic best wins (slower, best quality)")
 
     pq = sub.add_parser("qa", help="Run deterministic QA and list findings")
     pq.add_argument("project_id", type=int)
@@ -126,6 +159,12 @@ def build_parser() -> argparse.ArgumentParser:
     prt.add_argument("project_id", type=int)
     prt.add_argument("--term", required=True)
     prt.add_argument("--new", required=True)
+    prt.add_argument("--dry-run", action="store_true", help="Only show what would go stale, change nothing")
+
+    prg = sub.add_parser("retarget", help="New target language from the same source: story graph (term forms/concepts) carries over, renderings are re-done")
+    prg.add_argument("project_id", type=int)
+    prg.add_argument("--target-lang", required=True)
+    prg.add_argument("--name", required=True)
 
     pval = sub.add_parser("validate", help="Check a project / exported EPUB is complete (spec §84)")
     pval.add_argument("project_id", type=int)
@@ -160,8 +199,8 @@ def build_parser() -> argparse.ArgumentParser:
     pev.add_argument("en_epub")
     pev.add_argument("--chapters", default="3", help="Comma-separated chapter numbers present in both books")
     pev.add_argument("--paragraphs", type=int, default=8)
-    pev.add_argument("--configs", default="ABCDEF")
-    pev.add_argument("--out", default="docs/EVALUATION.md")
+    pev.add_argument("--configs", default="ABCDEFG")
+    pev.add_argument("--out", default="", help="Report path (default: <project-dir>/eval_report.md; never a tracked doc)")
     pev.add_argument("--json", default="")
 
     pd = sub.add_parser("datasets", help="Dataset license manifest (spec §46)")
@@ -218,12 +257,15 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "eval-epub":
         from .eval_real import run_corpus_eval, write_corpus_report
 
-        result = run_corpus_eval(args.zh_epub, args.en_epub, _provider(args), chapters=[int(x) for x in args.chapters.split(",")],
-                                 paragraphs=args.paragraphs, configs=args.configs, workdir=Path(args.project_dir) / "eval_run")
+        main = _provider(args)
+        result = run_corpus_eval(args.zh_epub, args.en_epub, main, chapters=[int(x) for x in args.chapters.split(",")],
+                                 paragraphs=args.paragraphs, configs=args.configs, workdir=Path(args.project_dir) / "eval_run",
+                                 term_provider=_helper(args, main), refine_provider=_helper(args, main))
         if args.json:
             Path(args.json).parent.mkdir(parents=True, exist_ok=True)
             Path(args.json).write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")
-        print(write_corpus_report(result, args.out))
+        out = args.out or str(Path(args.project_dir) / "eval_report.md")
+        print(write_corpus_report(result, out))
         print("mean chrF:", result["mean_chrf"])
         return 0
 
@@ -277,7 +319,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if cmd == "analyze":
         use = None if args.provider == "mock" and not args.suggest else _provider(args)
-        print(analyze_project(db, pid, project_dir=project_root(args.project_dir, pid), provider=use))
+        helper = None if use is None else _helper(args, use)
+        print(analyze_project(db, pid, project_dir=project_root(args.project_dir, pid), provider=use, term_provider=helper))
         return 0
 
     if cmd == "terminology":
@@ -302,9 +345,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if cmd == "translate":
         escalate = service.make_provider("ollama", args.escalate_model) if args.escalate_model else None
-        n = translate_project(db, pid, _provider(args), limit=args.limit, project_dir=project_root(args.project_dir, pid),
+        main = _provider(args)
+        proj = db.get_project(pid)
+        n = translate_project(db, pid, _translator(args, main, proj["source_lang"], proj["target_lang"]), limit=args.limit, project_dir=project_root(args.project_dir, pid),
                               chapter_id=_chapter_id(db, pid, args.chapter), on_progress=_progress, summarize=args.summaries, escalate_provider=escalate,
-                              n_prev=args.n_prev, word_limit=args.words)
+                              n_prev=args.n_prev, word_limit=args.words, summarize_provider=_helper(args, main),
+                              candidates=getattr(args, "candidates", 1) or 1)
         print(f"Translated {n} segments")
         return 0
 
@@ -320,7 +366,8 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "refine":
         from .refinement import run_refinement
 
-        n = run_refinement(db, pid, _provider(args), project_root(args.project_dir, pid), limit=args.limit,
+        main = _provider(args)
+        n = run_refinement(db, pid, _helper(args, main), project_root(args.project_dir, pid), limit=args.limit,
                            chapter_id=_chapter_id(db, pid, args.chapter), on_progress=_progress)
         print(f"Refined {n} segments")
         return 0
@@ -328,7 +375,8 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "review":
         from .qa import ai_qa
 
-        print(f"Reviewed {ai_qa(db, pid, _provider(args), chapter_id=_chapter_id(db, pid, args.chapter))} segments")
+        main = _provider(args)
+        print(f"Reviewed {ai_qa(db, pid, _helper(args, main), chapter_id=_chapter_id(db, pid, args.chapter))} segments")
         return 0
 
     if cmd in ("edit", "approve"):
@@ -359,11 +407,25 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if cmd == "retranslate":
-        from .refinement import mark_stale_by_term
+        from .refinement import mark_stale_by_term, propagation_impact
 
+        if args.dry_run:
+            impact = propagation_impact(db, pid, args.term)
+            print(f"{impact['segments']} segments in {len(impact['chapters'])} chapters would go stale:")
+            for title, n in list(impact["chapters"].items())[:10]:
+                print(f"  {n}x {title[:60]}")
+            return 0
         n = mark_stale_by_term(db, pid, args.term, args.new)
         print(f"Marked {n} segments stale; retranslating")
-        print(f"Retranslated {translate_project(db, pid, _provider(args), project_dir=project_root(args.project_dir, pid), on_progress=_progress, n_prev=args.n_prev)} segments")
+        main = _provider(args)
+        proj = db.get_project(pid)
+        print(f"Retranslated {translate_project(db, pid, _translator(args, main, proj['source_lang'], proj['target_lang']), project_dir=project_root(args.project_dir, pid), on_progress=_progress, n_prev=args.n_prev, summarize_provider=_helper(args, main))} segments")
+        return 0
+
+    if cmd == "retarget":
+        npid = service.retarget(db, pid, args.target_lang, args.name)
+        print(f"Project {npid} '{args.name}': same source, target {args.target_lang}, "
+              f"{len(db.chapters(npid))} chapters, story graph inherited (renderings to be re-done)")
         return 0
 
     if cmd == "validate":

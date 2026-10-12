@@ -28,16 +28,19 @@ from .refinement import run_refinement
 from .segment import ParsedChapter, to_html
 from .importers.base import store_chapters
 from .summaries import write_summaries
-from .terminology import build_glossary, mine_terms, suggest_term_translations, sync_bible, upsert_candidates
+from .terminology import build_glossary, mine_terms, reconcile_glossary, suggest_term_translations, sync_bible, upsert_candidates
 
 CONFIGS = {
-    "A": ("bare LLM", frozenset()),
-    "B": ("+glossary", frozenset({"glossary"})),
-    "C": ("+Story Bible", frozenset({"glossary", "bible"})),
-    "D": ("+translation memory", frozenset({"glossary", "bible", "tm"})),
-    "E": ("+hierarchical context", frozenset({"glossary", "bible", "tm", "context"})),
-    "F": ("full pipeline (+refine +QA)", frozenset({"glossary", "bible", "tm", "context"})),
+    "A": ("bare LLM", frozenset(), 0),
+    "B": ("+glossary", frozenset({"glossary"}), 0),
+    "C": ("+Story Bible", frozenset({"glossary", "bible"}), 0),
+    "D": ("+translation memory", frozenset({"glossary", "bible", "tm"}), 0),
+    "E": ("+hierarchical context", frozenset({"glossary", "bible", "tm", "context"}), 0),
+    "F": ("full pipeline (+refine +QA)", frozenset({"glossary", "bible", "tm", "context"}), 0),
+    "G": ("entity-first placeholders", frozenset({"placeholders", "bible", "tm"}), 0),  # mirrors D: mask swaps hint
+    "H": ("piecewise long segments (E13)", frozenset({"glossary", "bible", "tm"}), 300),  # D + split_pieces=300
 }
+CONFIG_SPLIT = {k: v[2] for k, v in CONFIGS.items()}  # split_pieces per config (0 = off)
 _CJK = re.compile(r"[一-鿿぀-ヿ가-힯]")
 _CN_DIGIT = {c: i for i, c in enumerate("零一二三四五六七八九")} | {"〇": 0}
 _ROMAN = {"i": 1, "v": 5, "x": 10, "l": 50, "c": 100, "d": 500, "m": 1000}
@@ -115,7 +118,8 @@ def _copy_project(src: Database, src_pid: int, upto_order: int, keep_in_last: in
 
 
 def run_corpus_eval(zh_epub: str | Path, en_epub: str | Path, provider, *, chapters: list[int], paragraphs: int = 8,
-                    configs: str = "ABCDEF", workdir: str | Path, term_limit: int = 30, log=print) -> dict:
+                    configs: str = "ABCDEF", workdir: str | Path, term_limit: int = 30, log=print, term_provider=None,
+                    refine_provider=None) -> dict:
     workdir = Path(workdir)
     shutil.rmtree(workdir, ignore_errors=True)
     workdir.mkdir(parents=True)
@@ -146,14 +150,16 @@ def run_corpus_eval(zh_epub: str | Path, en_epub: str | Path, provider, *, chapt
         text = "\n".join(source)
         present = {f for t in zh.terminology_for_project(zpid) for f in json.loads(t["source_forms"]) if f in text}
         t0 = time.time()
-        n_tr = suggest_term_translations(zh, zpid, provider, only_forms=present, limit=term_limit)
+        n_tr = suggest_term_translations(zh, zpid, term_provider or provider, only_forms=present, limit=term_limit,
+                                         retry_present=present, verbose=True,
+                                         translator=provider if getattr(provider, "translation_only", False) else None)
         glossary = {k_: v for k_, v in build_glossary(zh, zpid).items() if k_ in text}
         log(f"chapter {number}: {len(present)} candidate terms in excerpt, {n_tr} translated, {len(glossary)} in glossary ({time.time() - t0:.0f}s)", flush=True)
 
         res: dict = {"title": zch["title"], "reference": reference, "chrf_floor_unrelated_text": floor,
                      "glossary": glossary, "source": source, "configs": {}}
         for key in configs:
-            label, feats = CONFIGS[key]
+            label, feats, split = CONFIGS[key]
             cdir = workdir / f"ch{number}_{key}"
             cdir.mkdir(parents=True)
             db = Database(cdir / "project.db")
@@ -161,9 +167,10 @@ def run_corpus_eval(zh_epub: str | Path, en_epub: str | Path, provider, *, chapt
             write_summaries(db, pid, str(cdir))
             sync_bible(db, pid, str(cdir))
             t0 = time.time()
-            translate_project(db, pid, provider, project_dir=str(cdir), chapter_id=target_ch, features=feats)
+            translate_project(db, pid, provider, project_dir=str(cdir), chapter_id=target_ch, features=feats,
+                              split_pieces=split)
             if key == "F":
-                run_refinement(db, pid, provider, str(cdir), chapter_id=target_ch)
+                run_refinement(db, pid, refine_provider or provider, str(cdir), chapter_id=target_ch)
                 run_qa(db, pid, build_glossary(db, pid), chapter_id=target_ch)
             secs = time.time() - t0
             segs = db.segments_for_chapter(target_ch)
@@ -179,6 +186,13 @@ def run_corpus_eval(zh_epub: str | Path, en_epub: str | Path, provider, *, chapt
             }
             log(f"  {key} {label}: chrF={res['configs'][key]['chrf']} terms={hit}/{tot} {secs:.0f}s", flush=True)
             db.close()
+        oracle = "A" if "A" in configs else configs[0]  # uninstructed outputs are the purest habit oracle
+        odb = Database(workdir / f"ch{number}_{oracle}" / "project.db")
+        opid = odb.conn.execute("SELECT MAX(id) m FROM projects").fetchone()["m"]
+        res["elected"] = reconcile_glossary(odb, opid)
+        odb.close()
+        if res["elected"]:
+            log(f"  book vote ({oracle}): {res['elected']}", flush=True)
         out["chapters"][str(number)] = res
     out["mean_chrf"] = {k: round(sum(c["configs"][k]["chrf"] for c in out["chapters"].values() if k in c["configs"]) / max(1, len(out["chapters"])), 2) for k in configs}
     zh.close()
@@ -186,16 +200,31 @@ def run_corpus_eval(zh_epub: str | Path, en_epub: str | Path, provider, *, chapt
     return out
 
 
+def harness_score(term_hits: int, term_total: int, cjk_left: int, paras: int, qa_errors: int, refused: int) -> float:
+    """0-100 for what the harness controls: terms applied (40), complete
+    delivery in the target script (30), QA-clean (20), nothing refused (10)."""
+    terms = (term_hits / term_total) if term_total else 1.0
+    complete = max(0.0, 1.0 - cjk_left / max(paras, 1))
+    qa = 1.0 if qa_errors == 0 else max(0.0, 1.0 - qa_errors / max(paras, 1))
+    clean = 0.0 if refused else 1.0
+    return round(40 * terms + 30 * complete + 20 * qa + 10 * clean, 1)
+
+
 def write_corpus_report(result: dict, path: str | Path, title: str = "Real-corpus evaluation") -> Path:
     L = [f"# {title}", "", f"Model: `{result['model']}` · first {result['paragraphs']} paragraphs per chapter · "
          "reference: human English translation aligned by chapter + proportional length.", "",
          "chrF is 0-100 (higher = closer to the human translation). Term adherence = glossary terms in the source that appear "
-         "with the agreed rendering. `floor` = chrF of unrelated English text of the same length against the reference.", ""]
+         "with the agreed rendering. `floor` = chrF of unrelated English text of the same length against the reference. "
+         "**Harness Score** (0-100) covers what the harness controls — terms applied, complete delivery, QA-clean, nothing refused — "
+         "and is the number that should read near 100.", ""]
     for num, ch in result["chapters"].items():
-        L += [f"## Chapter {num}: {ch['title']}", "", f"floor (unrelated text): {ch['chrf_floor_unrelated_text']:.1f}" if ch["chrf_floor_unrelated_text"] is not None else "",
-              "", "| Config | chrF | Term adherence | CJK left | QA warn/err | Time |", "|---|---|---|---|---|---|"]
+        L += [f"## Chapter {num}: {ch['title']}", "", f"floor (unrelated text): {ch['chrf_floor_unrelated_text']:.1f}" if ch['chrf_floor_unrelated_text'] is not None else "",
+              *(["", f"Book vote (elected renderings): {ch['elected']}"] if ch.get("elected") else []),
+              "", "| Config | chrF | Term adherence | Harness Score | CJK left | QA warn/err | Time |", "|---|---|---|---|---|---|---|"]
         for key, c in ch["configs"].items():
-            L.append(f"| {key} {c['label']} | {c['chrf']} | {c['term_hits']}/{c['term_total']} | {c['cjk_leftover_paragraphs']} | {c['qa_warnings']}/{c['qa_errors']} | {c['seconds']}s |")
+            n = max(len(c.get("output", []) or []), 1)
+            score = harness_score(c["term_hits"], c["term_total"], c["cjk_leftover_paragraphs"], n, c["qa_errors"], c.get("refused", 0))
+            L.append(f"| {key} {c['label']} | {c['chrf']} | {c['term_hits']}/{c['term_total']} | {score} | {c['cjk_leftover_paragraphs']} | {c['qa_warnings']}/{c['qa_errors']} | {c['seconds']}s |")
         L += ["", "Glossary used: " + (", ".join(f"{k}={v}" for k, v in ch["glossary"].items()) or "(none)"), "",
               "<details><summary>First paragraph: source / reference / outputs</summary>", "", f"**Source**: {ch['source'][0]}", "",
               f"**Reference (aligned window, start)**: {ch['reference'][:600]}", ""]

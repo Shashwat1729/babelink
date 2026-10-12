@@ -94,7 +94,7 @@ const S = {
 };
 
 function loadCfg() {
-  const d = { provider: "ollama", model: "huihui_ai/qwen3-abliterated:4b", baseUrl: "", refineModel: "", summarize: true, chosen: false, batch: 0 };
+  const d = { provider: "ollama", model: "hymt2-1.8b", baseUrl: "", refineModel: "", summarize: true, chosen: false, batch: 0 };
   try { return { ...d, ...JSON.parse(localStorage.getItem("st-cfg") || "{}") }; } catch (e) { return d; }
 }
 function saveCfg() { try { localStorage.setItem("st-cfg", JSON.stringify(S.cfg)); } catch (e) { /* storage blocked */ } }
@@ -625,11 +625,12 @@ function viewChapter() {
         el("h1", { class: "serif" }, d.chapter.title, d.chapter.title_translated ? el("span", { class: "muted" }, ` · ${d.chapter.title_translated}`) : null)),
       el("div", { class: "actions" },
         el("button", { class: "btn primary", type: "button", disabled: busy || !open, onclick: () => translateChapter(c.id) }, icon("play"), open ? `Translate ${plural(open, "paragraph")}` : "All translated"),
+        el("button", { class: "btn", type: "button", onclick: () => { S.proof = !S.proof; render(); } }, S.proof ? "Editing view" : "Proofread"),
         el("button", { class: "btn", type: "button", disabled: busy || open === c.segments, title: "A second pass that polishes the prose without changing meaning", onclick: () => { if (requireModel()) startJob("refine", { chapter_id: c.id }); } }, "Refine"),
         el("button", { class: "btn", type: "button", disabled: busy || open === c.segments, onclick: () => startJob("qa", { chapter_id: c.id }) }, "Check quality"))),
     el("div", { id: "job-slot" }),
     d.chapter.page ? pageCard(c, d) : null,
-    el("div", { class: "ch-layout" }, el("div", { class: "segs" }, d.segments.length ? d.segments.map(segmentCard) : el("p", { class: "card muted" }, "No text was found on this page. If it has lettering, try a larger or sharper image.")),
+    S.proof ? proofView(d) : el("div", { class: "ch-layout" }, el("div", { class: "segs" }, d.segments.length ? d.segments.map(segmentCard) : el("p", { class: "card muted" }, "No text was found on this page. If it has lettering, try a larger or sharper image.")),
       el("aside", { class: "rail" },
         el("section", { class: "card" }, el("h2", {}, "Names in this chapter"),
           names.length ? names.map(([s, t]) => el("div", { class: "kv" }, el("span", { class: "cjk" }, s), el("strong", {}, t))) : el("p", { class: "muted small" }, "No locked names appear here yet."),
@@ -650,8 +651,18 @@ function pageCard(c, d) {
     el("p", { class: "muted small" }, "The original lettering is erased and the translation is set in the same bubble. Fix an OCR slip with Fix text on a block, then translate it again."));
 }
 
-function chapterNames(d) {
-  const seen = new Map();
+function proofView(d) {
+  // Reading view for proofreaders: continuous two-column prose, original
+  // left, translation right, one row per paragraph. Paragraphs with quality
+  // findings are edge-marked; use the browser's Print to take it to paper.
+  const col = (cls, title, cell) => el("div", { class: "proof-col" }, el("h3", {}, title),
+    d.segments.map((s) => el("p", { class: (s.findings.length ? "warn " : "") + cls, lang: cls === "po" ? S.project.source_lang : null }, cell(s))));
+  return el("div", { class: "proof-cols", role: "document", "aria-label": "Side-by-side proofreading view" },
+    col("po", "Original", (s) => s.source || "—"),
+    col("pt", "Translation", (s) => s.translation || el("span", { class: "missing" }, "Not translated yet")));
+}
+
+function chapterNames(d) {  const seen = new Map();
   for (const s of d.segments) for (const t of s.terms) if (!seen.has(t.source)) seen.set(t.source, t.target);
   return [...seen.entries()].slice(0, 60);
 }
@@ -972,7 +983,7 @@ function renderModelBody() {
 
   const refine = el("select", { "aria-label": "Refinement model", onchange: (ev) => { d.refineModel = ev.target.value; } },
     el("option", { value: "" }, "Same as the translation model"), info.installed.filter((m) => m.name !== d.model).map((m) => el("option", { value: m.name, selected: m.name === d.refineModel }, m.name)));
-  body.append(el("label", {}, "Refinement and review model (optional)", refine, el("span", { class: "hint" }, "A larger model for the polish pass and AI review. Leave as is to use one model for everything.")));
+  body.append(el("label", {}, "Refinement and review model (optional)", refine, el("span", { class: "hint" }, "A larger model for the polish pass and AI review. Leave as is: translation-only models automatically use the helper model for this.")));
   body.append(el("label", { class: "check" }, el("input", { type: "checkbox", checked: d.summarize, onchange: (ev) => { d.summarize = ev.target.checked; } }),
     el("span", {}, "Summarize each chapter so later chapters remember the plot ", el("span", { class: "hint" }, "(a little slower, better continuity)"))));
 

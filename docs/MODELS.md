@@ -5,9 +5,38 @@
 No commercial API is mandatory. Everything can run locally via Ollama, llama.cpp,
 vLLM, or any OpenAI-compatible endpoint.
 
+## Default engine: Tencent Hy-MT2 (translation-specialized)
+
+Translation runs on **Hy-MT2-1.8B** (a local `hymt2-1.8b` model built from the
+official Q4_K_M GGUF, ~1.1GB via Ollama) — a translation-only model that
+out-translates general 4B chat LLMs on zh/ja→en fiction while running on CPU:
+
+```bash
+ollama pull hf.co/tencent/Hy-MT2-1.8B-GGUF:Q4_K_M
+ollama create hymt2-1.8b -f Modelfile.hymt2   # installs the official chat template
+lorebridge translate --provider hymt   # --model defaults to hymt2-1.8b
+```
+
+Notes that cost real debugging time:
+
+- Hy-MT2 needs its **official prompt format** (terminology block, background
+  block, no system prompt) **and** its exact chat template in Ollama
+  (`Modelfile.hymt2`). The template's control tokens must be emitted by
+  Ollama's template engine: sending them as raw text BPE-fragments them and
+  produces degenerate output (`[[[[…`, tool-call JSON, assistant chatter).
+  `HymtOllamaProvider` handles both; do not point a generic provider at this
+  model.
+- Hy-MT2 is **translation-only**: term classification, refinement, review and
+  summaries are routed to a general-LLM helper (`--helper-model`, default
+  `huihui_ai/qwen3-abliterated:4b`). A 7B GGUF (`Hy-MT2-7B-GGUF:Q4_K_M`) is in
+  the registry for stronger hardware.
+- Direct-weights fallback: `--provider hymt-local` runs `tencent/Hy-MT2-1.8B`
+  via transformers (weights under `HF_HOME`, CPU bf16 ≈ 3.6GB RAM).
+
 ## Registry
 
-`lorebridge models --target-lang en` prints hardware-aware recommendations.
+`lorebridge models --target-lang en` prints hardware-aware recommendations
+(translation-specialized models rank first for translation).
 The starter registry in `src/lorebridge/registry.py` ships a few known models;
 extend it as you add models.
 
@@ -25,10 +54,9 @@ your content does not trigger refusals.
 
 ## Per-task routing (spec §9)
 
-- **NER / small jobs** — a 3B local model (e.g. muse-3b-4k, local-fallback-4k)
-- **Terminology extraction** — small multilingual model
-- **Translation** — specialized or strong 7B/14B (qwen2.5:14b where VRAM allows)
-- **Refinement** — same or stronger model
+- **Translation** — Hy-MT2-1.8B (default), Hy-MT2-7B where RAM allows
+- **Terminology classification / NER / small jobs** — a general 3-4B local model (e.g. huihui_ai/qwen3-abliterated:4b, muse-3b-4k)
+- **Refinement** — same or stronger general model (never the MT model)
 - **QA** — small model + deterministic checks
 
 Configure a model per task in `lorebridge.yaml` (`models: {translate: ..., refine: ...}`).

@@ -3,14 +3,15 @@
 `<workspace>/lorebridge.yaml`, or `--config FILE`. Precedence: command-line flag > file > built-in default.
 Unknown keys are an error, so a typo does not silently do nothing.
 
-    provider: ollama            # mock | ollama | openai-compatible
-    model: huihui_ai/qwen3-abliterated:4b
+    provider: hymt                # mock | ollama | hymt | openai-compatible
+    model: hf.co/tencent/Hy-MT2-1.8B-GGUF:Q4_K_M   # translation engine (Hy-MT2, ~1.1GB via Ollama)
+    helper_model: huihui_ai/qwen3-abliterated:4b   # general LLM for terms/refine/review/summaries
     base_url: ""                # for openai-compatible servers
     models:                     # model per task (CLI command); falls back to `model`
-      translate: qwen2.5:14b
-      refine: qwen2.5:14b
-      review: qwen2.5:7b
-      analyze: qwen2.5:7b
+      translate: hf.co/tencent/Hy-MT2-1.8B-GGUF:Q4_K_M
+      refine: huihui_ai/qwen3-abliterated:4b
+      review: muse-3b-4k
+      analyze: huihui_ai/qwen3-abliterated:4b
     escalate_model: qwen2.5:14b # stronger model for risky segments
     source_lang: zh
     target_lang: en
@@ -27,8 +28,8 @@ import yaml
 
 from . import service
 
-DEFAULTS = {"provider": "mock", "model": "qwen2.5:7b", "base_url": "", "source_lang": "auto", "target_lang": "en",
-            "style": "faithful-natural", "summaries": False, "escalate_model": None, "n_prev": 3}
+DEFAULTS = {"provider": "mock", "model": service.DEFAULT_TRANSLATE_MODEL, "helper_model": "", "base_url": "", "source_lang": "auto", "target_lang": "en",
+            "style": "faithful-natural", "summaries": False, "escalate_model": None, "n_prev": 3, "candidates": 1}
 TASKS = ("analyze", "translate", "refine", "review", "paste", "retranslate", "terminology")
 
 

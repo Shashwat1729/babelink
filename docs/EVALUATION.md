@@ -91,3 +91,45 @@ No real manga or manhua page has been scored yet. [DATASETS.md](DATASETS.md) lis
 - Term adherence counts surface forms, not meaning.
 - The context features are designed to matter more over long runs (names recurring over dozens of chapters, callbacks to earlier plot). A
   12-paragraph excerpt cannot show that. The planned test is the chapter-level data in [DATASETS.md](DATASETS.md) with a larger model.
+
+## 4. Hy-MT2-1.8B as the translation engine (2026-10-08/09)
+
+`hymt2-1.8b` (Tencent Hy-MT2-1.8B Q4_K_M via Ollama with the official chat
+template — see MODELS.md) + `huihui_ai/qwen3-abliterated:4b` helper, CPU.
+Reference windows are proportionally aligned to the translated excerpt; without
+that, chrF measures coverage fraction, not quality (10 vs 53 on the same outputs).
+
+| Run | Bare chrF | Harness chrF | Terms bare → harness | Harness Score b/h |
+|---|---|---|---|---|
+| ParallelFiction ja→en, 8 chapter heads | 49.26 | 48.96 | 4/5 → 5/5 | 96.6 → 99.7 |
+| OpenSakura ja→zh, 4 chunks (gold glossary) | 28.39 | 27.76 | 2/10 → 7/10 | 84.8 → 93.8 |
+| Red Chamber zh→en ch3 (A/D/F) | 37.57 | 40.07 / 40.24 | 5/18 → 10/18 | 66.1 → 82.2 |
+| Three Kingdoms zh→en ch1 (A/D/F) | 42.25 | 43.06 / 42.83 | 7/17 → 15/17 → 16/17 | — |
+| Three Kingdoms zh→en ch2 (A/D/F) | 43.93 | 43.82 / 44.08 | 7/13 → 13/13 → 12/13 | 88.2 (F) |
+
+- The bare model is already strong (Hy-MT2 does the heavy lifting); the
+  harness holds chrF parity while taking term adherence from ~1/3 to ~2/3+,
+  delivery to 100%, and QA-clean everywhere. chrF deltas under ~1 point are
+  run noise; the Harness Score is the number that reads near 100.
+- Consistency beats mimicry: the fan/Victorian references use their own name
+  spellings, so enforced canonical names sometimes cost chrF points while
+  being exactly what a whole-book translation needs (bare hallucinated
+  "Urumen" for 雨村; the harness enforces one rendering everywhere).
+- Refinement (F, helper refiner + guardrails + name-change tripwire) adds
+  +0.2-0.3 chrF with no damage; the tripwire fires on real corruptions
+  (Ruhai→Ruihai) and stays quiet otherwise. No translator notes fired on these
+  excerpts — the refiner only notes genuine wordplay/culture knots.
+- Full reports: `D:\StoryTranslation_data\eval_zh3\eval_report.md` (Red Chamber
+  ch3, incl. side-by-side prose), per-run Markdown in `eval_runs/`.
+
+- Direction is consistent (harness ≥ bare on chrF in 7/10 samples, terms up
+  everywhere), but absolute chrF against fan/Victorian references stays low —
+  the references paraphrase, so only row differences mean anything.
+- The Red Chamber run exposed two glossary bugs, both fixed: the helper
+  echoing source as translation (now `_is_bad_translation`) and ALL-CAPS
+  renderings like 且說=AND SAY (now rejected).
+- The `floor` baseline (unrelated Joly text vs the reference) scored 46.8,
+  *above* both systems: same-domain vocabulary overlap dominates absolute
+  chrF, so the floor is not a lower bound here. Only A-vs-D differences count.
+- Harness cost is the helper on CPU (30-200 s per chapter for term
+  classification); bare Hy-MT2 runs ~2-4 s per paragraph.

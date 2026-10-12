@@ -4,7 +4,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..db import Database
-from ..models import Chapter, Segment, SegmentState
 from ..segment import ParsedChapter
 
 
@@ -20,14 +19,6 @@ def read_text_file(path: str | Path) -> str:
 
 
 def store_chapters(db: Database, project_id: int, doc_id: int, chapters: list[ParsedChapter]) -> list[int]:
-    """Append chapters after the project's existing ones (imports and pastes accumulate)."""
-    base = db.conn.execute(
-        "SELECT COALESCE(MAX(order_index), -1) + 1 AS b FROM chapters WHERE project_id=?", (project_id,)
-    ).fetchone()["b"]
-    ids = []
-    for i, ch in enumerate(chapters):
-        ch_id = db.add_chapter(Chapter(None, project_id, doc_id, base + i, ch.title, ch.html, None))
-        for j, para in enumerate(ch.paragraphs):
-            db.add_segment(Segment(None, project_id, doc_id, ch_id, None, j, para, None, SegmentState.UNPROCESSED))
-        ids.append(ch_id)
-    return ids
+    """Append chapters after the project's existing ones (imports and pastes accumulate).
+    Single transaction via bulk_store_chapters: whole-book imports stay fast."""
+    return db.bulk_store_chapters(project_id, doc_id, chapters)

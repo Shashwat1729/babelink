@@ -18,7 +18,24 @@ class ModelInfo:
 
 
 # Small starter registry; user can extend via models.json in project dir.
+# Translation default is Tencent Hy-MT2-1.8B (translation-only MT model, ~1.1GB
+# Q4_K_M via Ollama): it out-translates general 4B chat LLMs on zh/ja->en.
 DEFAULT_REGISTRY: list[ModelInfo] = [
+    ModelInfo("hymt2-1.8b", "hymt", "ollama", ["zh", "en", "ja", "ko"],
+              {"translation": True, "literary_editing": False, "reasoning": False}, ["translation"],
+              ram_gb=4, vram_gb=0, quantizations=["Q4_K_M"]),
+    ModelInfo("hf.co/tencent/Hy-MT2-1.8B-GGUF:Q4_K_M", "hymt", "ollama", ["zh", "en", "ja", "ko"],
+              {"translation": True, "literary_editing": False, "reasoning": False}, ["translation"],
+              ram_gb=4, vram_gb=0, quantizations=["Q4_K_M"]),
+    ModelInfo("hf.co/tencent/Hy-MT2-1.8B-GGUF:Q8_0", "hymt", "ollama", ["zh", "en", "ja", "ko"],
+              {"translation": True, "literary_editing": False, "reasoning": False}, ["translation"],
+              ram_gb=6, vram_gb=0, quantizations=["Q8_0"]),
+    ModelInfo("hf.co/tencent/Hy-MT2-7B-GGUF:Q4_K_M", "hymt", "ollama", ["zh", "en", "ja", "ko"],
+              {"translation": True, "literary_editing": False, "reasoning": False, "long_context": True}, ["translation"],
+              ram_gb=8, vram_gb=6, quantizations=["Q4_K_M"]),
+    ModelInfo("cat-translate-1.4b", "cat", "ollama", ["ja", "en"],
+              {"translation": True, "literary_editing": False, "reasoning": False}, ["translation"],
+              ram_gb=4, vram_gb=0, quantizations=["Q4_K_M"]),
     ModelInfo("qwen2.5:7b", "ollama", "ollama", ["zh", "en", "ja", "ko"], {"translation": True, "literary_editing": True, "reasoning": True}, ["translation", "analysis"], ram_gb=8, vram_gb=6, quantizations=["Q4_K_M"]),
     ModelInfo("qwen2.5:14b", "ollama", "ollama", ["zh", "en", "ja", "ko"], {"translation": True, "literary_editing": True, "reasoning": True, "long_context": True}, ["translation", "refinement", "analysis"], ram_gb=16, vram_gb=12, quantizations=["Q4_K_M"]),
     ModelInfo("aya:8b", "ollama", "ollama", ["en", "hi", "es", "fr", "de", "zh"], {"translation": True}, ["translation"], ram_gb=8, vram_gb=6, quantizations=["Q4_K_M"]),
@@ -30,8 +47,9 @@ DEFAULT_REGISTRY: list[ModelInfo] = [
 ]
 
 
-def recommend(target_lang: str, vram_gb: float, ram_gb: float, quality: str = "balanced") -> list[ModelInfo]:
-    """Pick candidates that fit and support the target language."""
+def recommend(target_lang: str, vram_gb: float, ram_gb: float, quality: str = "balanced", task: str = "translation") -> list[ModelInfo]:
+    """Pick candidates that fit and support the target language. For translation,
+    translation-specialized models (Hy-MT2) rank before general chat LLMs."""
     out = []
     for m in DEFAULT_REGISTRY:
         if target_lang not in m.languages:
@@ -45,4 +63,6 @@ def recommend(target_lang: str, vram_gb: float, ram_gb: float, quality: str = "b
         out.sort(key=lambda m: -m.ram_gb)
     else:
         out.sort(key=lambda m: abs(m.ram_gb - 8))
+    if task == "translation":
+        out.sort(key=lambda m: (not (m.capabilities.get("translation") and not m.capabilities.get("reasoning"))))
     return out

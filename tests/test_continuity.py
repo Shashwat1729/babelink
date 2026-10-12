@@ -37,10 +37,14 @@ def test_second_chapter_reuses_everything_from_the_first(tmp_path):
 
     assert n == 2
     calls = [c for c in mock.calls if c["source"] != "第二章"]  # the chapter title is translated separately
-    assert len(calls) == 1, "the repeated paragraph came from translation memory, not the model"
-    call = calls[0]
-    assert call["source"] == "林凡离开了山门。"
-    assert call["glossary"] == {"林凡": "Lin Fan"}
+    # Entity-first (E09): the model sees opaque proxies, not prompt hints —
+    # the repeated paragraph still comes from TM (no call with 点了点头 content
+    # beyond the TM path), the new paragraph goes out masked.
+    assert not [c for c in calls if "点了点头" in c["source"]], "the repeated paragraph came from translation memory, not the model"
+    masked = [c for c in calls if "离开了山门" in c["source"]]
+    assert masked and "\u27e6E" in masked[0]["source"], "new paragraph goes out with entity proxies"
+    assert masked[0]["glossary"] == {}, "proxies replace prompt hints"
+    call = masked[0]
     assert "林凡点了点头。 => " in call["context"], "last translated pair of chapter 1 is in the prompt"
     assert "[Story so far]" in call["context"]
     segs = db.segments_for_chapter(ch2)

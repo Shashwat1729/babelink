@@ -342,4 +342,24 @@ pre.ctx { margin: 0; padding: 12px; max-height: 260px; overflow: auto; white-spa
   .ch-row .btn span { display: none; }
   .actions .btn { flex: 1 1 auto; }
 }
+
+/* ---- proofread reading view ----------------------------------------------------------------------- */
+/* Continuous side-by-side prose for proofreaders: original left, translation
+   right, aligned paragraph by paragraph. Prints as two columns. */
+.proof-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.proof-col h3 { margin: 0; padding: 10px 18px; font: .78rem var(--sans); color: var(--muted); border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface); }
+.proof-col + .proof-col { border-left: 1px solid var(--line); }
+.proof-col p { margin: 0; padding: 9px 18px; overflow-wrap: anywhere; }
+.proof-col p + p { border-top: 1px dotted var(--line); }
+.proof-col .po { font: 1.02rem/1.8 var(--cjk); }
+.proof-col .pt { font: 1.02rem/1.7 var(--serif); }
+.proof-col .missing { color: var(--muted); font-style: italic; }
+.proof-col p.warn { box-shadow: inset 3px 0 0 var(--warn); }
+@media (max-width: 640px) { .proof-cols { grid-template-columns: 1fr; } .proof-col + .proof-col { border-left: 0; border-top: 1px solid var(--line); } }
+@media print {
+  header.topbar, .ch-head .actions, .ch-head .nav, #job-slot, .rail, .toast-wrap { display: none !important; }
+  .proof-cols { border: 0; }
+  .proof-col h3 { position: static; }
+  main { max-width: none; }
+}
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }

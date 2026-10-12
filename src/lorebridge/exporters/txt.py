@@ -18,6 +18,8 @@ def export_txt(db: Database, project_id: int, out_path: str | Path, *, bilingual
             parts += [text, ""]  # blank line between paragraphs
             if bilingual:
                 parts += [f"    [{s['source_text'].strip()}]", ""]
+            if s["translator_note"]:
+                parts += [f"    [Translator's note: {s['translator_note'].strip()}]", ""]
         parts.append("")  # blank line between chapters
     text = "\n".join(parts)
     while "\n\n\n" in text:

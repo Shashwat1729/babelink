@@ -32,14 +32,33 @@ Every dataset must record license fields before use. Redistribution requires
 | gutenberg-9603 | en | Joly's translation, Book I (chapters 1-24 per Gutenberg) | human reference for chapters that exist in both |
 | gutenberg-51828 | zh | 聊齋志異 (short stories) | importer / chapter-split robustness; no paired translation |
 | gutenberg-9604 | en | Joly, Book II (chapters 25-56) | reference for later chapters |
+| gutenberg-1982 | ja | 芥川龍之介 羅生門 (1915, 32 paras / 5.9k chars, old kanji) | long-form ja→en source; `D:\StoryTranslation_data\corpus\rashomon_ja_paras.txt` |
+| wording-rashomon | ja→en | 3 pro-annotated paragraph pairs + translator notes (Wording Pro sample) | qualitative gold for Rashomon; full text gated, not scraped |
 
 Public-domain status depends on jurisdiction; check yours before redistributing derived files.
 Alignment is by chapter number plus a proportional-length window, not by paragraph (see `eval_real.py`).
 
 ## Network adapters
 
-`HuggingFaceAdapter`, `OPUSAdapter`, `WMTAdapter`, `FLORESAdapter` in `datasets.py` load a split through the `datasets` package
-(`pip install datasets`) and normalise it to the format above. They need network access and are not run in CI.
+`HuggingFaceAdapter`, `OPUSAdapter`, `WMTAdapter`, `FLORESAdapter`,
+`ColumnAdapter`, `ParallelFictionAdapter`, `OpenSakuraAdapter` in `datasets.py`
+load a split through the `datasets` package and normalise it to the format
+above. They need network access and are not run in CI. Hub downloads go to
+`HF_HOME` — on this machine `D:\cache\huggingface` (C: is full).
+
+Wired-in fiction sets (evaluation only, never redistributed; slices stay on D:):
+
+| Dataset | Shape | Adapter | Notes |
+|---|---|---|---|
+| [ParallelFiction-Ja_En-100k](https://huggingface.co/datasets/NilanE/ParallelFiction-Ja_En-100k) | chapter-level ja web novels + en fan translations (106k) | `ParallelFictionAdapter` | closest public match to the ja→en chapter pipeline; fan quality varies, compare configs not absolutes |
+| [OpenSakura LN ja-zh ALIGNED](https://huggingface.co/datasets/OpenSakura/OpenSakura-DS-260220-LN-ja-zh-ALIGNED-Eve) | chunk-level ja→zh pairs **with a gold glossary per row** (631k rows, 7.5GB — sample slices) | `OpenSakuraAdapter` | references are machine-generated: use the glossary column for term-adherence, not chrF-vs-human |
+| [Baka-Tsuki](https://www.baka-tsuki.org/project/index.php?title=Baka-Tsuki%3AAbout) | fan translations on a wiki, no dataset/API | — | eyeball comparisons only; never scrape or commit copies |
+| [GuoFeng Webnovel](https://github.com/longyuewangdcu/GuoFeng-Webnovel) | Tencent/China Literature web fiction, 14 genres | — (request-gated) | source of the WMT23 literary data; request access, never commit copies |
+
+Bare-model vs harness comparison: `scripts/eval_harness_vs_bare.py` runs each
+sample twice — once as a direct `provider.translate()` call, once through the
+full pipeline — and reports chrF++ plus term adherence for both, so the report
+shows what the model does versus what the harness adds.
 
 ## Next datasets (researched, none downloaded or wired in yet)
 

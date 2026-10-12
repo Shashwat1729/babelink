@@ -185,11 +185,13 @@ class JobRequest(BaseModel):
     limit: Optional[int] = Field(default=None, ge=1)
     max_words: Optional[int] = Field(default=None, ge=1)  # translate: stop after the paragraph that reaches this many source words
     provider: str = "ollama"
-    model: str = "huihui_ai/qwen3-abliterated:4b"
+    model: str = "hymt2-1.8b"
     base_url: str = ""
     refine_model: str = ""  # optional second model for refine / AI review; empty = same as `model`
+    helper_model: str = ""  # general LLM for terms/summaries when `model` is translation-only (Hy-MT2)
     summarize: bool = True
     ai_review: bool = False
+    candidates: int = Field(default=1, ge=1)  # translate: draws per paragraph, best wins
     uploads: list[str] = Field(default_factory=list)  # import_images: file names already saved under uploads/<project>/
 
 
@@ -197,16 +199,32 @@ def _work(job: Job, ws: Path, p: JobRequest) -> None:
     db = service.open_workspace(ws)
     try:
         pid, root = job.project_id, project_root(ws, job.project_id)
-        provider = service.make_provider(p.provider, p.model, p.base_url)
-        editor = service.make_provider(p.provider, p.refine_model, p.base_url) if p.refine_model else provider
+        kind, model = p.provider, p.model
+        if kind == "auto":  # direction-aware default engine; explicit choices bypass it
+            proj = db.get_project(pid)
+            kind, auto_model = service.default_engine(proj["source_lang"], proj["target_lang"])
+            model = model or auto_model
+        provider = service.make_provider(kind, model, p.base_url)
+        editor = service.make_provider(kind, p.refine_model, p.base_url) if p.refine_model else provider
+        helper = service.helper_for(editor if p.refine_model else provider, kind, p.base_url, p.helper_model)
+        # helper = general LLM for term classification + summaries when the
+        # translation engine is translation-only (Hy-MT2); else the main provider.
+        mt_only = service.is_mt_only(provider)
+        if mt_only and getattr(helper, "name", "") != getattr(provider, "name", ""):
+            from .fallback import maybe_chain
+            provider = maybe_chain(provider, helper)
 
         def progress(done: int, total: int, msg: str = "") -> None:
             job.done, job.total, job.message = done, total, msg
 
         if job.kind == "analyze":
-            job.result = analyze_project(db, pid, root, provider=provider if p.provider != "mock" else None)
+            job.result = analyze_project(db, pid, root, provider=provider if p.provider != "mock" else None,
+                                         term_provider=helper if p.provider != "mock" else None)
         elif job.kind == "suggest_terms":
-            job.result = {"translated": suggest_term_translations(db, pid, provider, limit=p.limit or 60)}
+            from .fallback import ChainProvider as _Chain
+            engine = provider.primary if isinstance(provider, _Chain) else provider
+            translator = engine if (p.provider != "mock" and getattr(engine, "translation_only", False)) else None
+            job.result = {"translated": suggest_term_translations(db, pid, helper, limit=p.limit or 60, translator=translator)}
             sync_bible(db, pid, root)
         elif job.kind == "translate":
             chapters: dict[int, object] = {}
@@ -227,10 +245,11 @@ def _work(job: Job, ws: Path, p: JobRequest) -> None:
             n = translate_project(
                 db, pid, provider, limit=p.limit, project_dir=root, chapter_id=p.chapter_id, on_progress=progress,
                 should_stop=job.stop.is_set, summarize=p.summarize, only_ids=set(p.segment_ids) or None,
-                word_limit=p.max_words, on_text=on_text)
+                word_limit=p.max_words, on_text=on_text, summarize_provider=helper,
+                candidates=max(1, p.candidates or 1))
             job.result = {"translated": n, "words": job.words}
         elif job.kind == "refine":
-            job.result = {"refined": run_refinement(db, pid, editor, root, limit=p.limit, chapter_id=p.chapter_id,
+            job.result = {"refined": run_refinement(db, pid, editor if p.refine_model or not mt_only else helper, root, limit=p.limit, chapter_id=p.chapter_id,
                                                     on_progress=progress, should_stop=job.stop.is_set)}
         elif job.kind == "import_images":
             from .images import import_images
@@ -243,7 +262,7 @@ def _work(job: Job, ws: Path, p: JobRequest) -> None:
         elif job.kind == "qa":
             job.result = run_qa(db, pid, build_glossary(db, pid), chapter_id=p.chapter_id)
             if p.ai_review:
-                job.result["ai_findings"] = ai_qa(db, pid, editor, limit=p.limit or 50, chapter_id=p.chapter_id)
+                job.result["ai_findings"] = ai_qa(db, pid, editor if p.refine_model or not mt_only else helper, limit=p.limit or 50, chapter_id=p.chapter_id)
         job.live = {}  # before the status flips: a poller that sees "done" must not also see a half-written paragraph
         job.status = "cancelled" if job.stop.is_set() else "done"
     except Exception as e:  # provider offline, bad model name ... shown in the UI; progress already saved

@@ -30,6 +30,30 @@ CHAPTER_HEADING = re.compile(
 _SEPARATOR = re.compile(r"^[\s—\-=─_*~·.]{4,}$")
 _CJK = re.compile(r"[぀-ヿ㐀-鿿가-힯]")
 _SENTENCE_END = re.compile(r"[。．.！？!?”\"」』]$")
+_SENT_SPLIT = re.compile(r"(?<=[。．！？!?；;])")
+
+
+def split_long(text: str, max_chars: int = 300) -> list[str]:
+    """MT-call-sized pieces of one segment (E13): split on sentence boundaries
+    only when over max_chars; short segments pass through untouched (single
+    piece) so behavior is identical unless splitting triggers. Pieces join
+    with '' (CJK) — the translate path rejoins and stores one segment, so DB
+    granularity never changes."""
+    if len(text) <= max_chars:
+        return [text]
+    sents = [s for s in _SENT_SPLIT.split(text) if s]
+    if len(sents) <= 1:
+        return [text]  # one giant sentence: splitting would break it mid-clause
+    pieces, cur = [], ""
+    for s in sents:
+        if cur and len(cur) + len(s) > max_chars:
+            pieces.append(cur)
+            cur = s
+        else:
+            cur += s
+    if cur:
+        pieces.append(cur)
+    return pieces or [text]
 _HEADING_TAGS = ["h1", "h2", "h3", "h4"]
 _BLOCK_TAGS = ["p", "div", "blockquote", "li"] + _HEADING_TAGS
 

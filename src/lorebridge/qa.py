@@ -12,12 +12,20 @@ from .db import Database
 from .models import SegmentState
 
 _CJK = re.compile(r"[一-鿿぀-ヿ가-힯]")
+# A quoted inscription with a parenthetical gloss ("敕造宁國府" (Built by
+# imperial order…)) is translated, not leftover: the CJK is the quoted source.
+_GLOSSED = re.compile(r"[\"“「『][一-鿿぀-ヿ가-힯]+[\"”」』]\s*\([^()]*\)")
 _NUM = re.compile(r"\d+")
 _LEAK = re.compile(r"<think>|\[(?:Passage|Glossary|Story context|Draft|Source)\b|^\s*(?:Translation|Output)\s*:", re.IGNORECASE | re.MULTILINE)
+# Unmapped entity proxies (?E200?, [E4], @@E3@@, __E1__, ⟦E2⟧) are never
+# legitimate English — the model rewrote or invented them instead of passing
+# them through (Red Chamber DG18: ?E200?). An error, not a warning: the
+# segment needs re-translation, and the finding routes it there.
+_PROXY_REMANT = re.compile(r"\u27e6E\d+\u27e7|@@E\d+@@|__E\d__|\[E\d+\]|\?E\d+\?")
 _LOOP = re.compile(r"(\b\w+(?:\W+\w+){2,5}\b)(?:\W+\1){3,}", re.IGNORECASE)
 
-DETERMINISTIC = ("missing_translation", "prompt_leak", "untranslated_source", "number_mismatch", "suspicious_omission",
-                 "suspicious_expansion", "repetition", "term_not_applied")
+DETERMINISTIC = ("missing_translation", "prompt_leak", "proxy_remnant", "untranslated_source", "number_mismatch", "suspicious_omission",
+                 "suspicious_expansion", "repetition", "term_not_applied", "truncated_ending")
 
 
 def check_segment(source: str, translated: str, source_lang: str = "zh", glossary: Optional[dict[str, str]] = None) -> list[tuple[str, str, str]]:
@@ -27,8 +35,10 @@ def check_segment(source: str, translated: str, source_lang: str = "zh", glossar
     found: list[tuple[str, str, str]] = []
     if _LEAK.search(translated):
         found.append(("error", "prompt_leak", "Output contains prompt or reasoning markup."))
+    if _PROXY_REMANT.search(translated):
+        found.append(("error", "proxy_remnant", "Output contains an unmapped entity proxy (?E200?/[E4]); re-translate."))
     cjk_source = bool(_CJK.search(source))
-    if cjk_source and _CJK.search(translated):
+    if cjk_source and _CJK.search(_GLOSSED.sub("", translated)):
         found.append(("warning", "untranslated_source", "Translation still contains CJK characters."))
     src_nums = _NUM.findall(source)
     if src_nums and not all(n in translated for n in src_nums):
@@ -41,6 +51,12 @@ def check_segment(source: str, translated: str, source_lang: str = "zh", glossar
         found.append(("warning", "suspicious_expansion", "Translation much longer than source."))
     if _LOOP.search(translated):
         found.append(("warning", "repetition", "Translation repeats the same phrase."))
+    if len(source) >= 60 and not re.search(r"[.!?…?\"”」』)\]]\s*$", translated):
+        # Rashomon CAT: a 322-char segment stopped mid-word ('religious ') at
+        # 1/5 of its token budget — early EOS, not a budget cutoff. Length
+        # ratios miss it (output was longer than source); the missing terminal
+        # punctuation is the tell. Warning: flags for re-translation review.
+        found.append(("warning", "truncated_ending", "Translation ends without terminal punctuation (possible early stop)."))
     low = translated.lower()
     for src, tgt in (glossary or {}).items():
         if src in source and tgt.lower() not in low:

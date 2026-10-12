@@ -79,6 +79,21 @@ def _fresh_html(title: str, translated: list[str], sources: Optional[list[str]],
     return f"<h1>{_html.escape(title)}</h1>{body}"
 
 
+def _append_notes(html: str, notes: list[str]) -> str:
+    """Translator's notes go at the chapter end, styled apart from the prose."""
+    if not notes:
+        return html
+    soup = BeautifulSoup(html, "lxml")
+    body = soup.find("body") or soup
+    for note in notes:
+        p = soup.new_tag("p", attrs={"class": "translator-note"})
+        em = soup.new_tag("i")
+        em.string = f"Translator's note: {note}"
+        p.append(em)
+        body.append(p)
+    return str(soup)
+
+
 def export_epub(db: Database, project_id: int, source_path: Optional[str | Path], out_path: str | Path, *,
                 bilingual: bool = False, title: Optional[str] = None) -> Path:
     out_path = Path(out_path)
@@ -113,14 +128,18 @@ def export_epub(db: Database, project_id: int, source_path: Optional[str | Path]
     items = []
     for n, ch in enumerate(chapters, 1):
         translated, sources = _chapter_texts(db, ch)
+        notes = [r["translator_note"] for r in db.conn.execute(
+            "SELECT translator_note FROM segments WHERE chapter_id=? AND translator_note<>'' AND translated_text IS NOT NULL ORDER BY order_index",
+            (ch["id"],)).fetchall()]
         ch_title = ch["title_translated"] or ch["title"]
         src_lines = sources if bilingual else None
         item = in_place.get(ch["id"])
         if item is not None:
-            item.set_content(_replace_paragraphs(ch["html"], translated, src_lines, ch["title_translated"], lang).encode("utf-8"))
+            html = _replace_paragraphs(ch["html"], translated, src_lines, ch["title_translated"], lang)
+            item.set_content(_append_notes(html, notes).encode("utf-8"))
         else:
             item = epub.EpubHtml(title=ch_title, file_name=f"chapter_{n:04d}.xhtml", lang=lang)
-            item.content = _fresh_html(ch_title, translated, src_lines, lang)
+            item.content = _append_notes(_fresh_html(ch_title, translated, src_lines, lang), notes)
             book.add_item(item)
         item.title = ch_title
         items.append(item)

@@ -113,6 +113,7 @@ MIGRATIONS = [
     ("chapters", "title_translated", "TEXT"),
     ("projects", "style", "TEXT DEFAULT 'faithful-natural'"),
     ("projects", "genre", "TEXT DEFAULT ''"),
+    ("segments", "translator_note", "TEXT DEFAULT ''"),
 ]
 
 
@@ -187,6 +188,29 @@ class Database:
         self.conn.commit()
         return cur.lastrowid
 
+    def bulk_store_chapters(self, project_id: int, doc_id: int, chapters: list) -> list[int]:
+        """Import many chapters + segments in ONE transaction. Row-at-a-time
+        commits make whole-book imports (1000+ chapters) take tens of minutes;
+        this does it in seconds. Crash-safety during translate is unaffected
+        (translate still commits per segment)."""
+        base = self.conn.execute(
+            "SELECT COALESCE(MAX(order_index), -1) + 1 AS b FROM chapters WHERE project_id=?", (project_id,)
+        ).fetchone()["b"]
+        ids: list[int] = []
+        with self.conn:
+            for i, ch in enumerate(chapters):
+                cur = self.conn.execute(
+                    "INSERT INTO chapters(project_id, document_id, order_index, title, html, summary) VALUES (?,?,?,?,?,?)",
+                    (project_id, doc_id, base + i, ch.title, ch.html, None),
+                )
+                ch_id = cur.lastrowid
+                self.conn.executemany(
+                    "INSERT INTO segments(project_id, document_id, chapter_id, scene_id, order_index, source_text, state) VALUES (?,?,?,?,?,?,?)",
+                    [(project_id, doc_id, ch_id, None, j, para, "UNPROCESSED") for j, para in enumerate(ch.paragraphs)],
+                )
+                ids.append(ch_id)
+        return ids
+
     def chapters(self, project_id: int) -> list[sqlite3.Row]:
         return self.conn.execute("SELECT * FROM chapters WHERE project_id=? ORDER BY order_index", (project_id,)).fetchall()
 
@@ -224,6 +248,13 @@ class Database:
             "SELECT * FROM segments WHERE chapter_id=? ORDER BY order_index", (chapter_id,)
         ).fetchall()
 
+    def segments_for_project(self, project_id: int, translated_only: bool = False) -> list[sqlite3.Row]:
+        """Every segment of a project (reconcile votes, audits)."""
+        q = "SELECT s.* FROM segments s WHERE s.project_id=? "
+        if translated_only:
+            q += "AND s.translated_text IS NOT NULL "
+        return self.conn.execute(q + "ORDER BY s.id", (project_id,)).fetchall()
+
     def open_segments(self, project_id: int, chapter_id: Optional[int] = None) -> list[sqlite3.Row]:
         """Segments still waiting for a translation, in reading order. NEEDS_REVIEW is excluded:
         those are waiting for a human (or an explicit re-translate), not for the next run."""
@@ -241,7 +272,7 @@ class Database:
         return row is not None and row["state"] in OPEN_STATES
 
     def update_segment(self, segment_id: int, translated: Optional[str] = None, state: Optional[SegmentState] = None, model_run_id: Optional[int] = None,
-                       only_if_state: Optional[tuple[str, ...]] = None) -> bool:
+                       note: Optional[str] = None, only_if_state: Optional[tuple[str, ...]] = None) -> bool:
         """Write the given fields. With `only_if_state` the write happens only while the segment is in one of those states, decided inside
         the UPDATE itself, so a model that finishes after a person edited the paragraph cannot overwrite it. Returns whether a row changed."""
         sets, vals = [], []
@@ -251,6 +282,8 @@ class Database:
             sets.append("state=?"); vals.append(state.value)
         if model_run_id is not None:
             sets.append("model_run_id=?"); vals.append(model_run_id)
+        if note is not None:
+            sets.append("translator_note=?"); vals.append(note)
         if not sets:
             return True
         where = "id=?"

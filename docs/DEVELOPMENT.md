@@ -4,7 +4,7 @@
 
 ```bash
 pip install -e ".[web,images,dev]"     # images = comic-page OCR (rapidocr-onnxruntime, opencv, numpy, Pillow)
-python -m pytest -q          # 82 tests, no network, no model; image tests skip without the extra
+python -m pytest -q          # 126 tests, no network, no model; image tests skip without the extra
 ```
 
 ## Layout

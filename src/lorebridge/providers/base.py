@@ -37,10 +37,18 @@ class LLMProvider(Protocol):
 
 
 class ChatProvider:
-    """Base for chat-style backends. Subclasses set `name` and implement `_chat_once`."""
+    """Base for chat-style backends. Subclasses set `name` and implement `_chat_once`.
+
+    `prompt_features` declares which harness controls the engine was trained to
+    consume in-prompt. The pipeline always passes everything; each translate()
+    sends only its declared subset. Anything undeclared is enforced OUTSIDE the
+    prompt (guided retry, vote+normalize) — narrow MT models go pathological on
+    unfamiliar machinery (E05: glossary preamble hung CAT-1.4B >15min). A
+    declaration per ENGINE, never per sentence."""
 
     name = "chat"
     retries = 2
+    prompt_features = frozenset({"glossary", "background", "tm_hints", "style"})
 
     def __init__(self) -> None:
         self.usage = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "refusals": 0}
