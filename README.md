@@ -70,6 +70,21 @@ Translating a chapter is three clicks. Proofreading it is the actual job, so the
 
 > Screenshots follow the current UI; the proofread view is the newest addition.
 
+## 📚 What it translates
+
+| Format | Example tested | Engine | Status |
+|---|---|---|---|
+| Chinese web novel (zh→en) | Red Chamber ch.3 vs Hawkes | Hy-MT2-1.8B | 13/13 terms, Harness 97 |
+| Japanese light novel (ja→en) | ParallelFiction bake-off | CAT-Translate-1.4B | beats Hy-MT2 head-to-head |
+| Japanese light novel (ja→zh) | OpenSakura, gold glossary | Hy-MT2-1.8B | 9/9 terms vs 1/9 bare |
+| Japanese classic (ja→en) | Rashōmon, 32 paras | CAT-Translate-1.4B | 32/32 complete, QA 5→1 |
+| Chinese manhua page (zh→en) | Martial Peak scanlation page | OCR + Hy-MT2 | 7/7 blocks, 33s, typeset |
+| Korean manhwa (ko→en) | Nano Machine | OCR + Hy-MT2 | engine proven (ko→en smoke ✓); page loop waits on story-page raws — aggregators serve covers statically, chapters render in JS |
+| Japanese manga (ja→en) | One Piece class | — | blocked on Japanese OCR (no usable open weights; same per-script slot as Korean, ready to fill) |
+
+Direction-aware default (`--provider auto`) picks the engine; every other direction falls back to Hy-MT2,
+which also handles ko→en and ja→en (smoke-tested). EPUB in, translated EPUB out for prose; pages in, CBZ out for comics.
+
 ## 🥊 Why not just call the model?
 
 A bare translation model on its own is fluent and inconsistent. Measured head-to-head on real books

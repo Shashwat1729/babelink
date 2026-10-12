@@ -237,8 +237,12 @@ helper `huihui_ai/qwen3-abliterated:4b` (4k ctx — 8k OOMs, see REGRESSIONS.md)
   page. Title renders 武境峰 (unknown-name transliteration — the names-review
   step exists for exactly this). Eval images stay on D:, never committed.
 - NOT done: same-chapter ZH raw (MangaDex hosts no Chinese for this title;
-  Baozimh/Comick bot-walled) and Korean raws (Nano Machine blocked on
-  acquisition, not OCR anymore). Fetch protocol documented in DATASETS.
+  Baozimh/Comick bot-walled) and Korean story pages (Nano Machine: covers
+  fetch fine, chapters render in JS — needs Playwright or a manual drop).
+  Stylized cover lettering defeats the v1-mobile model (0 lines on two real
+  covers — brush strokes + vertical text, a documented OCR limit, not a
+  regression). Hy-MT2 ko→en and ja→en smoke-tested clean (2s/1s).
+  Fetch protocol documented in DATASETS.
 
 - zh got kMandarin DP alignment; ja kanji names had NO phonetic check (the
   pinyin clause even misfired on romaji-shaped renderings — fixed by scoping

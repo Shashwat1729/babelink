@@ -68,7 +68,7 @@ shows what the model does versus what the harness adds.
 | MangaDex zh / zh-hk (same title) | none exist | licensed title — no Chinese scanlations hosted at all |
 | Comick.io API search | endpoint shape changed (404) | would need re-discovery; deprioritized after MangaDex worked |
 | Baozimh web search | 403 bot wall | app-endpoint pattern known but gated; needs session handling |
-| Nano Machine Korean raws (manhwa18x-class sites) | not attempted after walls | unblocked on the OCR side now — needs raw acquisition only |
+| Nano Machine Korean story pages (manhwa18x-class sites) | JS-rendered readers: only covers in static HTML | needs Playwright fetch (available in dev extras) or manual raw drop; OCR + ko→en engine already proven |
 
 Protocol for your own raws: drop page images in a folder, import as a `ko`/`zh` project,
 translate, export CBZ; score OCR blocks against a manual transcript and translations
