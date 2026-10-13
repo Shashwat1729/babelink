@@ -19,3 +19,6 @@ leaderboard.md
 corpus/
 eval_runs/
 .playwright-mcp/
+my-books/
+*.log
+.DS_Store

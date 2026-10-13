@@ -94,7 +94,7 @@ A bare translation model on its own is fluent and inconsistent. Measured head-to
 | | Bare model call | Babelink harness |
 |---|---|---|
 | Name/term adherence, OpenSakura ja→zh (9 gold terms) | 1/9 | **9/9** |
-| Name/term adherence, Red Chamber ch.3 (13 glossary terms) | 2/4 (early) | **13/13** |
+| Name/term adherence, Red Chamber ch.3 (13 glossary terms) | 2/4 (early code) | **13/13** |
 | Harness Score (terms applied · complete delivery · QA-clean · nothing refused) | 80 | **97** |
 | QA warnings, Rashomon 32-paragraph run | 5 | **1** (both 32/32 complete, zero untranslated text left) |
 | Fluency (chrF vs human reference) | — | within ±2 (see note) |
@@ -290,7 +290,7 @@ Theme (system, light, dark) and accent colour are under the circle icon.
 
 ```bash
 pip install -e ".[web,images,dev]"
-python -m pytest -q                                      # 123 tests; no network or model needed
+python -m pytest -q                                      # 128 tests; no network or model needed
 python scripts/ui_smoke.py --url http://127.0.0.1:8765   # novel flow in a real browser (needs playwright)
 python scripts/ui_pages_smoke.py --url http://127.0.0.1:8765   # comic-page flow in a real browser
 python scripts/ui_live_smoke.py --url http://127.0.0.1:8765    # live streaming, Stop, double click (needs a running Ollama model)
@@ -308,7 +308,9 @@ docs/             architecture, decisions, evaluation, datasets, gaps, roadmap
 
 ## License
 
-No licence has been chosen yet, so all rights are reserved by default. Add a `LICENSE` file before sharing the code.
+Proprietary — evaluation use only, see [LICENSE](LICENSE). Commercial use needs a licence from the
+copyright holder. Shipped demo crops are downscaled fragments for illustration; full evaluation
+texts and comic pages stay local and are never committed.
 
 Evaluation texts are public-domain Project Gutenberg files fetched on demand, or copyrighted chapters kept locally and never committed. Comic-page OCR uses
 [RapidOCR](https://github.com/RapidAI/RapidOCR) (Apache-2.0). Reference projects were studied; no code was copied from them.
