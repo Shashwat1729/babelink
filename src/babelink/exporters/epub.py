@@ -121,7 +121,7 @@ def export_epub(db: Database, project_id: int, source_path: Optional[str | Path]
         dc["language"] = [(lang, {})]
     else:
         book = epub.EpubBook()
-        book.set_identifier(f"lorebridge-{project_id}")
+        book.set_identifier(f"babelink-{project_id}")
         book.set_title(title or project["name"])
         book.set_language(lang)
 

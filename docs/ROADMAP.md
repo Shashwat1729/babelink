@@ -6,7 +6,7 @@ previous phase on fixed dataset slices. Boxes are checked only when the feature 
 
 ## Phase 1 — Core
 
-- [x] Python package, CLI `lorebridge`
+- [x] Python package, CLI `babelink`
 - [x] SQLite (WAL) schema: projects, documents, chapters, segments, terminology, TM, QA, edits, model runs
 - [x] EPUB importer/exporter (source EPUB rewritten in place, or rebuilt; bilingual option)
 - [x] TXT, HTML/XHTML and pasted-text importers
@@ -65,7 +65,7 @@ previous phase on fixed dataset slices. Boxes are checked only when the feature 
 - [x] Pages and CBZ import: OCR (RapidOCR, Chinese + English), bubble grouping, reading order, tall-strip tiling (`images.py`)
 - [x] Erase lettering (flat fill from the bubble colour, inpaint on art) and typeset the translation in the bubble
 - [x] Web: add pages, paste an image from the clipboard, side-by-side page view, fix OCR text, save PNG, download CBZ; CLI: `export --out x.cbz`
-- [x] Korean recogniser via external weights (PP-OCRv1-mobile rec + dict, `LOREBRIDGE_OCR_MODELS`; E18 measured, upgrade = newer weights)
+- [x] Korean recogniser via external weights (PP-OCRv1-mobile rec + dict, `BABELINK_OCR_MODELS`; E18 measured, upgrade = newer weights)
 - [ ] Japanese recogniser (nothing bundled reads it)
 - [ ] Vertical text, right-to-left reading order, speaker detection
 - [ ] Model-based inpainting for text on textured art; panel detection

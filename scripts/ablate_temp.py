@@ -11,10 +11,10 @@ os.environ.setdefault("HF_HOME", r"D:\StoryTranslation_data\hf")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from lorebridge import service  # noqa: E402
-from lorebridge.datasets import OpenSakuraAdapter, ParallelFictionAdapter  # noqa: E402
-from lorebridge.eval import chrf  # noqa: E402
-from lorebridge.hymt import SAMPLING  # noqa: E402
+from babelink import service  # noqa: E402
+from babelink.datasets import OpenSakuraAdapter, ParallelFictionAdapter  # noqa: E402
+from babelink.eval import chrf  # noqa: E402
+from babelink.hymt import SAMPLING  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--dataset", default="parallel-fiction")
@@ -35,7 +35,7 @@ for temp in [float(t) for t in args.temps.split(",")]:
         paras = [p.strip() for p in r["source"].split("\n\n") if p.strip()][:6]
         # HymtOllamaProvider.translate reads the shared SAMPLING dict at call
         # time, so mutating it here overrides temperature for this call only.
-        import lorebridge.hymt as H
+        import babelink.hymt as H
 
         old = H.SAMPLING["temperature"]
         H.SAMPLING["temperature"] = temp

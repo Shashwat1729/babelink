@@ -10,12 +10,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from bs4 import BeautifulSoup
 
-from lorebridge.db import Database
-from lorebridge.exporters.epub import _replace_paragraphs
-from lorebridge.exporters.validate import validate_epub, validate_project
-from lorebridge.importers import import_epub
-from lorebridge.segment import segment_tags
-from lorebridge.service import open_workspace
+from babelink.db import Database
+from babelink.exporters.epub import _replace_paragraphs
+from babelink.exporters.validate import validate_epub, validate_project
+from babelink.importers import import_epub
+from babelink.segment import segment_tags
+from babelink.service import open_workspace
 
 SRC: Path  # resolved in main() from testdata/*.epub
 
@@ -70,12 +70,12 @@ def main():
     print(f"tag/segment mismatches: {total_mismatch}")
 
     # mock full-book export with translations = source (no CJK issue for en book)
-    from lorebridge.models import SegmentState
+    from babelink.models import SegmentState
     db.conn.execute(
         "UPDATE segments SET translated_text = substr(source_text, 1, 200), state=? WHERE project_id=?",
         (SegmentState.TRANSLATED.value, pid))
     db.conn.commit()
-    from lorebridge.exporters import export_epub
+    from babelink.exporters import export_epub
     out = tmp / "audit_out.epub"
     export_epub(db, pid, SRC, out)
     rep = validate_epub(out, "en")

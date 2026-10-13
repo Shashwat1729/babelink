@@ -1,14 +1,14 @@
 import json
 from pathlib import Path
 
-from lorebridge.context import gather_context, render_context
-from lorebridge.db import Database
-from lorebridge.importers import import_txt
-from lorebridge.pipeline import analyze_project, translate_project
-from lorebridge.providers.base import MockProvider
-from lorebridge.story_bible import load_section
-from lorebridge.summaries import chapter_summary
-from lorebridge.terminology import detect_contradictions
+from babelink.context import gather_context, render_context
+from babelink.db import Database
+from babelink.importers import import_txt
+from babelink.pipeline import analyze_project, translate_project
+from babelink.providers.base import MockProvider
+from babelink.story_bible import load_section
+from babelink.summaries import chapter_summary
+from babelink.terminology import detect_contradictions
 
 
 def _setup(tmp_path: Path):
@@ -58,7 +58,7 @@ def test_contradictions_detected(tmp_path: Path):
     row = db.conn.execute("SELECT * FROM terminology LIMIT 1").fetchone()
     if row:
         db.add_terminology(
-            __import__("lorebridge.models", fromlist=["TerminologyEntry"]).TerminologyEntry(
+            __import__("babelink.models", fromlist=["TerminologyEntry"]).TerminologyEntry(
                 None, pid, json.loads(row["source_forms"]), {"en": "DIFFERENT"}, "", "preferred", "suggested", 1
             )
         )

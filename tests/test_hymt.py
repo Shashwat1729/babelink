@@ -1,15 +1,15 @@
 """Hy-MT2 + CAT integration: prompt formats, provider selection, helper routing (all offline)."""
-from lorebridge import service
-from lorebridge.db import Database
-from lorebridge.hymt import ASSISTANT, BOS, DEFAULT_MODEL, EOS, USER, full_name, is_mt_model, mt_prompt, unwrap_output, wrap_prompt
-from lorebridge.importers.base import store_chapters
-from lorebridge.pipeline import analyze_project, translate_project
-from lorebridge.providers.base import MockProvider
-from lorebridge.providers.cat_ollama import CatOllamaProvider, DEFAULT_MODEL as CAT_MODEL, cat_prompt
-from lorebridge.providers.hymt_ollama import HymtOllamaProvider
-from lorebridge.providers.ollama import OllamaProvider
-from lorebridge.registry import recommend
-from lorebridge.segment import ParsedChapter, to_html
+from babelink import service
+from babelink.db import Database
+from babelink.hymt import ASSISTANT, BOS, DEFAULT_MODEL, EOS, USER, full_name, is_mt_model, mt_prompt, unwrap_output, wrap_prompt
+from babelink.importers.base import store_chapters
+from babelink.pipeline import analyze_project, translate_project
+from babelink.providers.base import MockProvider
+from babelink.providers.cat_ollama import CatOllamaProvider, DEFAULT_MODEL as CAT_MODEL, cat_prompt
+from babelink.providers.hymt_ollama import HymtOllamaProvider
+from babelink.providers.ollama import OllamaProvider
+from babelink.registry import recommend
+from babelink.segment import ParsedChapter, to_html
 
 
 def test_mt_prompt_official_format():
@@ -71,7 +71,7 @@ def test_make_provider_selects_cat():
 
 
 def test_clean_output_strips_stray_eos():
-    from lorebridge.prompts import clean_output
+    from babelink.prompts import clean_output
     assert clean_output("He smiled quietly.</s>") == "He smiled quietly."
     assert clean_output("[Translation]  \nHe smiled quietly.") == "He smiled quietly."
     assert clean_output("Hello") == "Hello"
@@ -81,10 +81,11 @@ def test_clean_output_strips_source_echo_dump():
     """Nano Machine: 'DAMN IT ALL...' made Hy-MT2 echo the source with '=>'
     alignment notes and a [来源文本] marker. The shipped text keeps only the
     translation; a legit '=>' with no echo marker is left alone."""
-    from lorebridge.prompts import clean_output
+    from babelink.prompts import clean_output
     monster = ("该死！！ => 真他妈糟糕！！\n我无法移动……我的腿也动不了了……！ => 我无法移动……我的腿也动不了了……！"
                "[来源文本]\n该死的……")
     assert clean_output(monster) == "该死！！"
+    assert clean_output("该死！！ => 真他妈糟糕！！\n我无法移动…… => 我无法移动……！") == "该死！！"
     assert clean_output("a => b") == "a => b"
 
 
@@ -147,8 +148,8 @@ def test_translate_uses_summarize_provider(tmp_path):
 def test_translate_survives_helper_outage(tmp_path):
     """Upload-and-go with no helper installed: term suggestion fails, the
     translation run still delivers every paragraph (empty glossary)."""
-    from lorebridge.prompts import ProviderError
-    from lorebridge.terminology import upsert_candidates
+    from babelink.prompts import ProviderError
+    from babelink.terminology import upsert_candidates
 
     class DownHelper(MockProvider):
         def suggest_terms(self, *a, **k):

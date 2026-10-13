@@ -5,15 +5,15 @@ import zipfile
 import pytest
 from fastapi.testclient import TestClient
 
-from lorebridge import web
+from babelink import web
 
-H = {"X-Requested-With": "lorebridge"}
+H = {"X-Requested-With": "babelink"}
 ZH = "林凡走进青云宗。\n\n大师兄说：“欢迎。”\n\n林凡点了点头。"
 
 
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("LOREBRIDGE_HOME", str(tmp_path))
+    monkeypatch.setenv("BABELINK_HOME", str(tmp_path))
     web.JOBS.clear()
     return TestClient(web.app)
 
@@ -36,7 +36,7 @@ def wait(c, job_id, timeout=20):
 
 def test_index_and_static(client):
     r = client.get("/")
-    assert r.status_code == 200 and "Lorebridge" in r.text
+    assert r.status_code == 200 and "Babelink" in r.text
     assert client.get("/static/app.js").status_code == 200
     assert client.get("/static/app.css").status_code == 200
 

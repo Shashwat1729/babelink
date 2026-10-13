@@ -10,14 +10,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from lorebridge import service  # noqa: E402
-from lorebridge.db import Database  # noqa: E402
-from lorebridge.eval import chrf, term_adherence  # noqa: E402
-from lorebridge.eval_real import align_reference, find_chapter, harness_score  # noqa: E402
-from lorebridge.importers import import_epub  # noqa: E402
-from lorebridge.refinement import run_refinement  # noqa: E402
-from lorebridge.service import open_workspace  # noqa: E402
-from lorebridge.terminology import build_glossary  # noqa: E402
+from babelink import service  # noqa: E402
+from babelink.db import Database  # noqa: E402
+from babelink.eval import chrf, term_adherence  # noqa: E402
+from babelink.eval_real import align_reference, find_chapter, harness_score  # noqa: E402
+from babelink.importers import import_epub  # noqa: E402
+from babelink.refinement import run_refinement  # noqa: E402
+from babelink.service import open_workspace  # noqa: E402
+from babelink.terminology import build_glossary  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("db")

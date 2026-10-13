@@ -28,19 +28,19 @@ os.environ.setdefault("HF_HOME", r"D:\StoryTranslation_data\hf")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from lorebridge import service  # noqa: E402
-from lorebridge.datasets import ColumnAdapter, LocalFileAdapter, OpenSakuraAdapter, ParallelFictionAdapter  # noqa: E402
-from lorebridge.db import Database  # noqa: E402
-from lorebridge.eval import chrf, term_adherence  # noqa: E402
-from lorebridge.importers.base import store_chapters  # noqa: E402
-from lorebridge.models import SegmentState  # noqa: E402
-from lorebridge.pipeline import analyze_project, translate_project  # noqa: E402
-from lorebridge.qa import check_segment  # noqa: E402
-from lorebridge.segment import ParsedChapter, to_html  # noqa: E402
-from lorebridge.terminology import build_glossary  # noqa: E402
+from babelink import service  # noqa: E402
+from babelink.datasets import ColumnAdapter, LocalFileAdapter, OpenSakuraAdapter, ParallelFictionAdapter  # noqa: E402
+from babelink.db import Database  # noqa: E402
+from babelink.eval import chrf, term_adherence  # noqa: E402
+from babelink.importers.base import store_chapters  # noqa: E402
+from babelink.models import SegmentState  # noqa: E402
+from babelink.pipeline import analyze_project, translate_project  # noqa: E402
+from babelink.qa import check_segment  # noqa: E402
+from babelink.segment import ParsedChapter, to_html  # noqa: E402
+from babelink.terminology import build_glossary  # noqa: E402
 
 _CJK = re.compile(r"[一-鿿぀-ヿ가-힯]")
-DATA_ROOT = Path(os.environ.get("LOREBRIDGE_DATA", r"D:\StoryTranslation_data"))
+DATA_ROOT = Path(os.environ.get("BABELINK_DATA", r"D:\StoryTranslation_data"))
 
 
 def split_paras(text: str, cap: int = 12) -> list[str]:
@@ -134,7 +134,7 @@ def run(args) -> dict:
         # confirmed terms: the harness must APPLY it, bare never sees it.
         # Without this the comparison can't measure glossary use at all.
         for g in gold_glossary(rec).items():
-            from lorebridge.models import TerminologyEntry
+            from babelink.models import TerminologyEntry
 
             db.add_terminology(TerminologyEntry(None, pid, [g[0]], {tgt_lang: g[1]}, "", "preferred", "confirmed", 99))
         n = translate_project(db, pid, provider, project_dir=None, chapter_id=ch_ids[0], candidates=args.candidates)

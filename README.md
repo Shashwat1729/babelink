@@ -1,6 +1,6 @@
 <div align="center">
 
-# Lorebridge
+# Babelink
 
 **Long-form fiction translation that keeps every name, voice and plot thread consistent across the whole book.**
 
@@ -15,26 +15,26 @@ Local-first. Runs on your own models. Nothing leaves your machine unless you poi
 
 [Quick start](#-quick-start) · [For translators](#-for-translators-proofread--publish) · [Bare model vs harness](#-why-not-just-call-the-model) · [How it works](#-how-it-works) · [Models](#-models) · [Evaluation](#-evaluation) · [CLI](#-command-line) · [Docs](#-documentation)
 
-![Lorebridge web app](docs/screenshots/web-ui.png)
+![Babelink web app](docs/screenshots/web-ui.png)
 
 </div>
 
 ## Why
 
 Sentence-by-sentence machine translation breaks down on long fiction. The heroine's name comes out three ways, a sect becomes a "gate" in
-chapter 4 and a "school" in chapter 40, and the register of a dialogue shifts every few lines. Lorebridge treats a book as one
+chapter 4 and a "school" in chapter 40, and the register of a dialogue shifts every few lines. Babelink treats a book as one
 project with a memory: it remembers how every name was rendered, what happened so far, and what you corrected, and feeds that back into every
 later chapter — then proves it with votes, checks and a side-by-side view instead of asking you to trust it.
 
 ## ✨ Quick start
 
 ```bash
-git clone https://github.com/Shashwat1729/lorebridge
-cd lorebridge
+git clone https://github.com/Shashwat1729/babelink
+cd babelink
 pip install -e ".[web]"              # add `images` for comics, `dev` for the tests
 ollama pull hymt2-1.8b              # translation engine (Tencent Hy-MT2, ~3.5GB)
 ollama pull huihui_ai/qwen3-abliterated:4b   # helper: names, summaries, review
-lorebridge --project-dir my-books web        # http://127.0.0.1:8000
+babelink --project-dir my-books web        # http://127.0.0.1:8000
 ```
 
 Then: **New work → drop your EPUB → Translate → Download translated EPUB.** The app picks the right engine per language automatically
@@ -78,9 +78,9 @@ Translating a chapter is three clicks. Proofreading it is the actual job, so the
 | Japanese light novel (ja→en) | ParallelFiction bake-off | CAT-Translate-1.4B | beats Hy-MT2 head-to-head |
 | Japanese light novel (ja→zh) | OpenSakura, gold glossary | Hy-MT2-1.8B | 9/9 terms vs 1/9 bare |
 | Japanese classic (ja→en) | Rashōmon, 32 paras | CAT-Translate-1.4B | 32/32 complete, QA 5→1 |
-| Chinese manhua page (zh→en) | Martial Peak scanlation page | OCR + Hy-MT2 | 7/7 blocks, 33s, typeset |
-| Korean manhwa (en→zh) | Nano Machine ch.1 story pages (photo above) | OCR + Hy-MT2 | 11/11 blocks, 29s, typeset; fragment-echo bug found + fixed on these pages |
-| Korean manhwa (ko→en) | Nano Machine | OCR + Hy-MT2 | ko→en engine proven; KO story raws JS-walled (covers fetched, lettering too stylized for v1 OCR) |
+| Chinese manhua (zh→en) | Martial Peak ch.1 raws, photo above | OCR + Hy-MT2 | 11/11 blocks, 37s, QA 11/11 |
+| Korean manhwa (en→zh) | Nano Machine ch.1, full strip above | OCR + Hy-MT2 | 21/21 blocks, 62s, QA 21/21 |
+| Korean manhwa (ko→en) | Nano Machine | OCR + Hy-MT2 | ko→en engine proven; KO story raws JS-walled |
 | Japanese manga (ja→en) | One Piece class | — | blocked on Japanese OCR (no usable open weights; same per-script slot as Korean, ready to fill) |
 
 Direction-aware default (`--provider auto`) picks the engine; every other direction falls back to Hy-MT2,
@@ -91,7 +91,7 @@ which also handles ko→en and ja→en (smoke-tested). EPUB in, translated EPUB 
 A bare translation model on its own is fluent and inconsistent. Measured head-to-head on real books
 (Hy-MT2-1.8B, same passages, same model — the only difference is the harness):
 
-| | Bare model call | Lorebridge harness |
+| | Bare model call | Babelink harness |
 |---|---|---|
 | Name/term adherence, OpenSakura ja→zh (9 gold terms) | 1/9 | **9/9** |
 | Name/term adherence, Red Chamber ch.3 (13 glossary terms) | 2/4 (early) | **13/13** |
@@ -141,24 +141,19 @@ and `STALE` when a name they use changes. Design notes: [docs/ARCHITECTURE.md](d
 
 ## 🤖 Models
 
-Small, specialized, local. The app picks the engine per translation direction automatically (`--provider auto`, the default):
+Small, specialized, local. The app picks the engine per direction automatically (`--provider auto`, the default):
 
 | Direction | Engine | Size | Why |
 |---|---|---|---|
-| ja → en | CAT-Translate-1.4B (Ollama `cat14b`) | ~1.9GB | Beats Hy-MT2 head-to-head on fiction ja→en (bake-off: bare chrF 46.8–58.2) |
-| zh → en, others | Hy-MT2-1.8B (Ollama `hymt2-1.8b`) | ~3.5GB | Translation-only model from Tencent; needs its official chat template (bundled) |
-| Helper (all) | `huihui_ai/qwen3-abliterated:4b` | ~2.5GB | General LLM for name classification, summaries, review — never for translation itself |
+| ja → en | CAT-Translate-1.4B (Ollama `cat14b`) | ~1.9GB | Beats Hy-MT2 head-to-head on fiction ja→en |
+| zh → en, others | Hy-MT2-1.8B (Ollama `hymt2-1.8b`) | ~3.5GB | Translation-only model from Tencent; official chat template bundled |
+| Helper (all) | `huihui_ai/qwen3-abliterated:4b` | ~2.5GB | Names, summaries, review — never translation itself |
 
 ```bash
 ollama pull hymt2-1.8b
 ollama pull huihui_ai/qwen3-abliterated:4b
 # Japanese novels: build the CAT model from its GGUF (see docs/MODELS.md)
 ```
-
-Any model Ollama serves, or any OpenAI-compatible endpoint, also works — a larger model is the single biggest
-fluency lever. The registry and the picker ([docs/MODELS.md](docs/MODELS.md)) recommend models for your hardware.
-Qwen3-family models are called with thinking disabled. The helper runs at a reduced context (4k) so it fits
-alongside the engine on a 16GB CPU-only machine.
 
 ## 📊 Evaluation
 
@@ -178,31 +173,31 @@ Numbers, method and honest limits: [docs/EVALUATION.md](docs/EVALUATION.md). Cor
 ## 💻 Command line
 
 ```bash
-lorebridge --project-dir demo import novel.epub --source-lang zh
-lorebridge --project-dir demo analyze 1 --provider auto        # mine names, propose renderings
-lorebridge --project-dir demo terminology 1 --accept-all
-lorebridge --project-dir demo translate 1 --provider auto
-lorebridge --project-dir demo qa 1
-lorebridge --project-dir demo export 1 --out translated.epub
-lorebridge --project-dir demo validate 1 --file translated.epub
+babelink --project-dir demo import novel.epub --source-lang zh
+babelink --project-dir demo analyze 1 --provider auto        # mine names, propose renderings
+babelink --project-dir demo terminology 1 --accept-all
+babelink --project-dir demo translate 1 --provider auto
+babelink --project-dir demo qa 1
+babelink --project-dir demo export 1 --out translated.epub
+babelink --project-dir demo validate 1 --file translated.epub
 ```
 
 Continue a book chapter by chapter:
 
 ```bash
-lorebridge --project-dir demo paste 1 --file chapter12.txt --title "Chapter 12" --translate --provider auto
-cat chapter13.txt | lorebridge --project-dir demo paste 1 --translate --provider auto
+babelink --project-dir demo paste 1 --file chapter12.txt --title "Chapter 12" --translate --provider auto
+cat chapter13.txt | babelink --project-dir demo paste 1 --translate --provider auto
 ```
 
-One chapter out as text: `lorebridge --project-dir demo export 1 --out chapter.txt` (add `--bilingual` for original + translation; `.epub`/`.cbz` pick their writer from the extension).
-Score a run against a human translation: `lorebridge eval-epub original.epub human.epub --chapters 3 --configs ADF`.
+One chapter out as text: `babelink --project-dir demo export 1 --out chapter.txt` (add `--bilingual` for original + translation; `.epub`/`.cbz` pick their writer from the extension).
+Score a run against a human translation: `babelink eval-epub original.epub human.epub --chapters 3 --configs ADF`.
 
 Other commands: `projects`, `chapters`, `terminology`, `edit`, `approve`, `retranslate --term X --new Y`, `review`,
 `storybible`, `style`, `models`, `refine`, `benchmark`, `eval-epub`, `datasets`.
 
 ### Configuration
 
-`<project-dir>/lorebridge.yaml` or `--config FILE`; command-line flags win over the file, and unknown keys are rejected.
+`<project-dir>/babelink.yaml` or `--config FILE`; command-line flags win over the file, and unknown keys are rejected.
 
 ```yaml
 provider: auto
@@ -229,50 +224,54 @@ n_prev: 4                           # earlier translated passages shown to the m
 
 ## Manhua and comics
 
-Real pages, measured — not a mockup. Nano Machine ch.1 (Asura Scans English) through the full loop,
-raw page left, our Chinese typeset page right (downscaled crops; art © Hanjung Worya / Geumgang Bulgoe):
+Real pages through the real loop — raw left, ours right (downscaled; Nano Machine art © Hanjung Worya /
+Geumgang Bulgoe, Martial Peak art © 噼咔噼 / Tencent).
+
+**Martial Peak ch.1, Chinese → English** (raws fetched from a Chinese aggregator, AES-descrypted with the key
+from its own reader JS):
 
 | Raw page | Our translation |
 |---|---|
-| ![](docs/screenshots/nm-raw-crop.png) | ![](docs/screenshots/nm-ours-crop.png) |
+| ![](docs/screenshots/mp-page-raw.png) | ![](docs/screenshots/mp-page-ours.png) |
 
-| Step | Measured |
+4 pages, 11/11 blocks OCR'd, 11/11 translated in 37s, QA 11 checked / 11 passed / 0 warnings.
+`我叫杨开，是凌霄阁的试炼弟子` → "My name is Yang Kai, and I am a trial disciple of Lingxiao Ge."
+
+**Nano Machine ch.1, English → Chinese** (full webtoon strip, Asura Scans English):
+
+| Raw strip | Our translation |
 |---|---|
-| OCR (2 real story pages, webtoon art) | 11/11 dialogue blocks found |
-| Translation en→zh (Hy-MT2-1.8B) | 11/11 blocks, 29s total |
-| Typeset back onto the page / CBZ export | rendered, lettering erased + refit per bubble |
+| ![](docs/screenshots/nm-page-raw.png) | ![](docs/screenshots/nm-page-ours.png) |
 
-Korean pages use a Korean recognition model (official PP-OCR weights, fetched to your machine, no new packages):
-the default engine reads near-nothing on Korean text while the Korean engine finds every content line —
-with honest limits (the 2021-era mobile model misreads ~1 syllable in 4; a newer weight file drops in with no code change).
-Japanese pages still need another recognizer.
+4 pages, 21/21 blocks in 62s, QA 21 checked / 21 passed / 5 warnings / 0 needs review.
 
-What this proves and what it doesn't: OCR→translation→typesetting works on real art (credit-page wording translates
-cleanly; the series title comes out 武境峰 — an unknown name transliterated, which is exactly what the Names review
-step is for). Page-level proof on Korean raws (e.g. Nano Machine) waits on raw acquisition, not on code — the fetch
-attempts and protocol are logged in [docs/DATASETS.md](docs/DATASETS.md), and evaluation images are never committed
-to the repo (copyright stays with its owners; the numbers above are reproducible with your own raws).
+**Translator's notes — auto-generated per bubble** (Nano Machine run; this is what the proofreader sees):
 
-1. **Read.** RapidOCR finds each line of text and its position (Chinese, English, Korean rec models). Tall webtoon strips are cut into overlapping tiles first. Lines are grouped into
-   speech bubbles and put in reading order.
-2. **Translate.** Each bubble is a segment in the normal pipeline, so names, memory and context work exactly as they do for a novel.
-3. **Replace.** The old lettering is erased (filled with the bubble's own colour, or inpainted when it sits on artwork) and the translation is
-   set in the same bubble, with the font size fitted to the space. Compare original and translated side by side on the page view.
-4. **Correct and export.** Fix what the OCR misread (including Korean slips), save a page as PNG or download everything as a CBZ.
+| Bubble | Ours | QA |
+|---|---|---|
+| I CAN'T MOVE...MYLEG ANYMORE...! | 我无法移动……我的腿已经不行了……！ | — |
+| DAMN IT ALL... | 该死！！ | echo-dump caught → stripped → re-ran clean |
+| YOU MUST'VE HAD QUITE A LOT OF TROUBLE RUNNING FOR AN HOUR TO R... | 你肯定花了好长时间，跑了一个小时才走到这里。 | truncated_ending (source bubble itself cut) |
+| WELL DONE, PRINCE CHEON. | 干得好，车恩王子。 | — |
+| THAT I'VE BEEN DANCING IN THE MIDDLE OF YOUR PALMS FROM THE START... | 那泰维本正在从开始阶段在你的手掌中间跳舞…… | — |
+
+Korean pages use a Korean recognition model (official PP-OCR weights, no new packages); Japanese pages still
+need another recognizer, and Korean story raws are still behind JS walls (covers fetched — fetch log in
+[docs/DATASETS.md](docs/DATASETS.md)).
 
 ```bash
 pip install -e ".[web,images]"
-lorebridge --project-dir demo import page.png --name "Demo" --source-lang zh --target-lang en
-lorebridge --project-dir demo translate 1 --provider auto
-lorebridge --project-dir demo export 1 --out translated.cbz
+babelink --project-dir demo import page.png --name "Demo" --source-lang zh --target-lang en
+babelink --project-dir demo translate 1 --provider auto
+babelink --project-dir demo export 1 --out translated.cbz
 ```
 
-**Limits to know about.** The bundled OCR reads Chinese and English; Japanese and Korean need another recogniser. Vertical text, right-to-left
-reading order, sound effects and model-based inpainting are not built. Text on busy art leaves smudges. It has been tested on generated pages and in a
-browser, and has not been scored on a manga benchmark. Details in [docs/GAPS.md](docs/GAPS.md).
+**Limits to know about.** The bundled OCR reads Chinese, English and Korean (Korean via external weights);
+Japanese needs another recogniser. Vertical text, right-to-left reading order and model-based inpainting are
+not built. Text on busy art leaves smudges. Details in [docs/GAPS.md](docs/GAPS.md).
 
 The server only accepts loopback `Host` headers (add others with
-`LOREBRIDGE_HOSTS`) and requires an `X-Requested-With` header on every write. It has no accounts or TLS, so do not expose it to a network.
+`BABELINK_HOSTS`) and requires an `X-Requested-With` header on every write. It has no accounts or TLS, so do not expose it to a network.
 Theme (system, light, dark) and accent colour are under the circle icon.
 
 ## Development
@@ -288,7 +287,7 @@ python scripts/ui_live_smoke.py --url http://127.0.0.1:8765    # live streaming,
 Source layout:
 
 ```
-src/lorebridge/   pipeline, context, terminology, story bible, qa, refinement, importers, exporters, providers,
+src/babelink/   pipeline, context, terminology, story bible, qa, refinement, importers, exporters, providers,
                   images (comic pages), web + static UI, evaluation
 tests/            pytest suite
 scripts/          corpus download, held-out evaluation, browser smoke tests, sample page generator

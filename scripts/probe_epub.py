@@ -29,7 +29,7 @@ docs = [d for d in docs if d is not None and d.get_type() == ebooklib.ITEM_DOCUM
 print("spine docs:", len(docs))
 sizes = sorted((len(d.get_content()), d.get_id()) for d in docs)
 print("smallest:", sizes[0][0], "largest:", sizes[-1][0], "total MB:", round(sum(s for s, _ in sizes) / 2**20, 2))
-from lorebridge.segment import stream_from_html
+from babelink.segment import stream_from_html
 
 t1 = time.time()
 n = 0

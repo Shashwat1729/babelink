@@ -13,8 +13,8 @@ from pathlib import Path
 
 from ebooklib import epub
 
-from lorebridge.eval_real import chapter_number, run_corpus_eval, write_corpus_report
-from lorebridge.providers.ollama import OllamaProvider
+from babelink.eval_real import chapter_number, run_corpus_eval, write_corpus_report
+from babelink.providers.ollama import OllamaProvider
 
 
 def one_chapter_epub(txt: Path, title: str, lang: str, out: Path) -> None:

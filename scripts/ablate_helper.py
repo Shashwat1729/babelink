@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from lorebridge import service  # noqa: E402
+from babelink import service  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--models", nargs="+", default=["huihui_ai/qwen3-abliterated:4b", "gemma3:1b"])

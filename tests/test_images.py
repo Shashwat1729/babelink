@@ -14,12 +14,12 @@ pytest.importorskip("PIL")
 
 from PIL import Image, ImageDraw  # noqa: E402
 
-from lorebridge import images, service, web  # noqa: E402
-from lorebridge.db import Database  # noqa: E402
-from lorebridge.pipeline import translate_project  # noqa: E402
-from lorebridge.providers.base import MockProvider  # noqa: E402
+from babelink import images, service, web  # noqa: E402
+from babelink.db import Database  # noqa: E402
+from babelink.pipeline import translate_project  # noqa: E402
+from babelink.providers.base import MockProvider  # noqa: E402
 
-H = {"X-Requested-With": "lorebridge"}
+H = {"X-Requested-With": "babelink"}
 
 
 def quad(x0, y0, x1, y1):
@@ -121,7 +121,7 @@ def test_typeset_fits_long_text_inside_round_bubble(tmp_path):
 # ---- web ---------------------------------------------------------------------------------------------
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("LOREBRIDGE_HOME", str(tmp_path))
+    monkeypatch.setenv("BABELINK_HOME", str(tmp_path))
     web.JOBS.clear()
     return TestClient(web.app)
 
@@ -184,7 +184,7 @@ def test_web_pages_end_to_end_with_real_ocr(client, tmp_path):
 
 def _korean_model_files():
     import os
-    d = Path(os.environ.get("LOREBRIDGE_OCR_MODELS", r"D:\StoryTranslation_data\ocr_models"))
+    d = Path(os.environ.get("BABELINK_OCR_MODELS", r"D:\StoryTranslation_data\ocr_models"))
     rec, keys = d / "korean_mobile_v2.0_rec_infer.onnx", d / "korean_dict.txt"
     return (rec, keys) if rec.is_file() and keys.is_file() else None
 
@@ -195,13 +195,13 @@ def test_korean_ocr_finds_lines_where_default_finds_none(tmp_path):
     every content line (syllable confusions allowed — detection is the bar)."""
     pytest.importorskip("rapidocr_onnxruntime")
     if _korean_model_files() is None:
-        pytest.skip("no Korean OCR weights (LOREBRIDGE_OCR_MODELS)")
+        pytest.skip("no Korean OCR weights (BABELINK_OCR_MODELS)")
     from PIL import Image, ImageDraw, ImageFont
     try:
         font = ImageFont.truetype(r"C:\Windows\Fonts\malgun.ttf", 44)
     except OSError:
         pytest.skip("no Korean font on this machine")
-    from lorebridge.images import detect_blocks
+    from babelink.images import detect_blocks
     img = Image.new("RGB", (700, 340), "white")
     d = ImageDraw.Draw(img)
     for i, t in enumerate(["나노 머신이 깨어났다", "천마가 돌아왔다", "빨리 도망쳐!", "사형, 조심하세요"]):
@@ -211,7 +211,7 @@ def test_korean_ocr_finds_lines_where_default_finds_none(tmp_path):
     import cv2
     cv = cv2.imread(str(p))
     assert len(detect_blocks(cv)) <= 1  # control: default engine is blind here
-    from lorebridge.images import ocr_lines
+    from babelink.images import ocr_lines
     lines = [t for _, t, s in ocr_lines(cv, lang="ko") if s >= 0.5]
     joined = " ".join(lines)
     # detection bar (all 4 content lines surface) + the phrases the v1 mobile

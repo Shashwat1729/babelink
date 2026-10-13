@@ -5,18 +5,18 @@ import zipfile
 
 from ebooklib import epub
 
-from lorebridge import service
-from lorebridge.dataset_manifest import MANIFEST, check_manifest
-from lorebridge.db import Database
-from lorebridge.eval import chrf, term_adherence
-from lorebridge.eval_real import align_reference, chapter_number
-from lorebridge.exporters import export_epub, export_txt
-from lorebridge.exporters.validate import validate_epub, validate_project
-from lorebridge.pipeline import translate_project
-from lorebridge.providers.base import MockProvider
-from lorebridge.qa import check_segment, run_qa
-from lorebridge.review import edit_segment
-from lorebridge.story_bible import project_root
+from babelink import service
+from babelink.dataset_manifest import MANIFEST, check_manifest
+from babelink.db import Database
+from babelink.eval import chrf, term_adherence
+from babelink.eval_real import align_reference, chapter_number
+from babelink.exporters import export_epub, export_txt
+from babelink.exporters.validate import validate_epub, validate_project
+from babelink.pipeline import translate_project
+from babelink.providers.base import MockProvider
+from babelink.qa import check_segment, run_qa
+from babelink.review import edit_segment
+from babelink.story_bible import project_root
 
 CH = "第一章 开始\n\n林凡走进青云宗，花了三天。\n\n大师兄点了点头。"
 
@@ -157,7 +157,7 @@ def test_dataset_manifest_complete():
 def test_ollama_disables_thinking_and_retries_without_it_on_old_servers(monkeypatch):
     import httpx
 
-    from lorebridge.providers.ollama import OllamaProvider
+    from babelink.providers.ollama import OllamaProvider
 
     bodies = []
 
@@ -178,7 +178,7 @@ def test_term_suggestions_keep_names_and_drop_common_words(tmp_path):
     """Held-out chapter regression: 废物->'waste', 身体->'body', 一名->'a' were enforced and rewrote normal prose.
     E17: no word lists — the prompt contract (lowercase rendering + non-name
     concept = ordinary word) keeps them as vote candidates, never enforced."""
-    from lorebridge.terminology import build_glossary, suggest_term_translations, upsert_candidates
+    from babelink.terminology import build_glossary, suggest_term_translations, upsert_candidates
 
     class Terms(MockProvider):
         def suggest_terms(self, items, source_lang="zh", target_lang="en"):
@@ -197,7 +197,7 @@ def test_term_suggestions_drop_echo_translations(tmp_path):
     """ParallelFiction regression: helper echoed 陛下->陛下 / 反乱->反乱 as
     'suggested' translations; the model then ignored the bogus mapping and
     term adherence scored 0/2."""
-    from lorebridge.terminology import build_glossary, suggest_term_translations, upsert_candidates
+    from babelink.terminology import build_glossary, suggest_term_translations, upsert_candidates
 
     class Echo(MockProvider):
         def suggest_terms(self, items, source_lang="ja", target_lang="en"):
@@ -214,7 +214,7 @@ def test_mining_junk_never_reaches_the_helper():
     """E17: only STRUCTURAL shapes filter before the helper (number+counter,
     saying verbs). Which ordinary words are not terms is the helper's verdict
     + dispersion rank — never a word list."""
-    from lorebridge.terminology import _is_mining_junk, mine_terms
+    from babelink.terminology import _is_mining_junk, mine_terms
 
     for junk in ("三日", "二人", "笑曰", "答曰", "3日"):
         assert _is_mining_junk(junk), junk
@@ -230,7 +230,7 @@ def test_mining_junk_red_chamber_budget_eaters():
     Grammar (的: every passage) is dropped by dispersion; bursty names (黛玉:
     4 passages) outrank diffuse function words (起來/姐姐: spread thin) — in
     any language, with no word lists."""
-    from lorebridge.terminology import mine_terms
+    from babelink.terminology import mine_terms
 
     core = ["黛玉黛玉去見王夫人，賈政問如海。",
             "如海笑，眾人見如海，王夫人同如海說話，黛玉黛玉笑。",
@@ -248,18 +248,18 @@ def test_mining_junk_red_chamber_budget_eaters():
 
 
 def test_mine_terms_finds_katakana_names():
-    from lorebridge.terminology import mine_terms
+    from babelink.terminology import mine_terms
 
     terms = dict(mine_terms(["アルメリアの反乱はヘンリーによって鎮圧された。"] * 3))
     assert "アルメリア" in terms and "ヘンリー" in terms
-    from lorebridge.terminology import mine_terms
+    from babelink.terminology import mine_terms
 
     terms = dict(mine_terms(["アルメリアの反乱はヘンリーによって鎮圧された。"] * 3))
     assert "アルメリア" in terms and "ヘンリー" in terms
 
 
 def test_pinyin_shaped_renderings_enforced_only_for_names():
-    from lorebridge.terminology import _is_bad_translation, _is_pinyin_shaped
+    from babelink.terminology import _is_bad_translation, _is_pinyin_shaped
 
     assert _is_pinyin_shaped("San Ri") and _is_pinyin_shaped("Yuzhen") and _is_pinyin_shaped("Ruci")
     assert _is_pinyin_shaped("Wuhé")  # tone marks still read as pinyin
@@ -296,7 +296,7 @@ def test_agreement_gate_demotes_unshared_renderings(tmp_path):
     probe outage fails open (helper's verdict stands)."""
     import json
 
-    from lorebridge.terminology import build_glossary, suggest_term_translations, upsert_candidates
+    from babelink.terminology import build_glossary, suggest_term_translations, upsert_candidates
 
     class Helper(MockProvider):
         def suggest_terms(self, items, source_lang="zh", target_lang="en"):
@@ -311,7 +311,7 @@ def test_agreement_gate_demotes_unshared_renderings(tmp_path):
 
     class Down(MockProvider):
         def translate(self, source, **kw):
-            from lorebridge.prompts import ProviderError
+            from babelink.prompts import ProviderError
             raise ProviderError("down")
 
     db, pid, _ = project(tmp_path, "小廝來了。\n\n兄弟笑了。\n\n薛姨媽到了。\n\n賈政問黛玉。")
@@ -331,7 +331,7 @@ def test_agreement_gate_demotes_unshared_renderings(tmp_path):
 def test_lowercase_renderings_normalized_then_judged(tmp_path):
     """The terms prompt asks for natural casing: 'his majesty' must normalize
     to 'His Majesty' and enforce, while 'three days' normalizes and is dropped."""
-    from lorebridge.terminology import build_glossary, suggest_term_translations, upsert_candidates
+    from babelink.terminology import build_glossary, suggest_term_translations, upsert_candidates
 
     class Natural(MockProvider):
         def suggest_terms(self, items, source_lang="ja", target_lang="en"):
@@ -346,7 +346,7 @@ def test_lowercase_renderings_normalized_then_judged(tmp_path):
 
 
 def test_aliases_with_one_rendering_merge(tmp_path):
-    from lorebridge.terminology import build_glossary, suggest_term_translations, upsert_candidates
+    from babelink.terminology import build_glossary, suggest_term_translations, upsert_candidates
 
     class Names(MockProvider):
         def suggest_terms(self, items, source_lang="zh", target_lang="en"):
@@ -363,7 +363,7 @@ def test_aliases_with_one_rendering_merge(tmp_path):
 def test_term_suggestions_drop_all_caps_renderings(tmp_path):
     """Dream of the Red Chamber run: 且說=AND SAY, 一般=GENERAL entered the
     glossary; no name renders in ALL CAPS."""
-    from lorebridge.terminology import build_glossary, suggest_term_translations, upsert_candidates
+    from babelink.terminology import build_glossary, suggest_term_translations, upsert_candidates
 
     class Shouty(MockProvider):
         def suggest_terms(self, items, source_lang="zh", target_lang="en"):
@@ -378,7 +378,7 @@ def test_term_suggestions_drop_all_caps_renderings(tmp_path):
 def test_glossed_inscription_is_not_leftover(tmp_path):
     """Red Chamber ch3: the plaque “敕造宁国府” (Built by imperial order…)
     is a translated quotation, not untranslated source."""
-    from lorebridge.qa import check_segment
+    from babelink.qa import check_segment
 
     src = '匾上大書"敕造宁國府"五個大字'
     quoted = 'Above the gate hung a plaque bearing the five big characters “敕造宁国府” (Commissioned by the Emperor to build the Ningguo Mansion).'
@@ -394,8 +394,8 @@ def test_translator_cross_check_records_vote_candidates(tmp_path):
     probe failures fail open."""
     import json
 
-    from lorebridge.prompts import ProviderError
-    from lorebridge.terminology import build_glossary, suggest_term_translations, upsert_candidates
+    from babelink.prompts import ProviderError
+    from babelink.terminology import build_glossary, suggest_term_translations, upsert_candidates
 
     class Helper(MockProvider):
         def suggest_terms(self, items, source_lang="zh", target_lang="en"):
@@ -431,7 +431,7 @@ def test_translator_cross_check_records_vote_candidates(tmp_path):
 def test_estimate_roundtrip_and_entity_recall():
     """E11 pure signals: empty back-translation scores 0; a name dropped in EN
     ('the girl' for 黛玉) shows full chrF-ish text but zero entity recall."""
-    from lorebridge.estimate import entity_recall, roundtrip_chrf
+    from babelink.estimate import entity_recall, roundtrip_chrf
 
     src = "黛玉去了，賈政問話。"
     gloss = {"黛玉": "Daiyu", "賈政": "Jia Zheng"}
@@ -447,7 +447,7 @@ def test_estimate_roundtrip_and_entity_recall():
 def test_qa_flags_unmapped_proxy_remnants():
     """DG18: ?E200?/[E4] remnants are never English — error (re-translate),
     while clean text and real bracket usage ('vitamin E4') stay clean."""
-    from lorebridge.qa import check_segment
+    from babelink.qa import check_segment
 
     types = [t for _, t, _ in check_segment("黛玉去了。", "When ?E200? arrived, [E4] saw.", "zh")]
     assert "proxy_remnant" in types
@@ -459,7 +459,7 @@ def test_qa_flags_unmapped_proxy_remnants():
 def test_qa_flags_truncated_ending():
     """Rashomon: output stopping mid-word ('religious ') at 1/5 of budget —
     length ratios miss it; missing terminal punctuation is the tell."""
-    from lorebridge.qa import check_segment
+    from babelink.qa import check_segment
 
     src = "羅生門下有乞丐。" * 10  # 60+ chars
     types = [t for _, t, _ in check_segment(src, "Under Rashomon there were beggars and religious ", "zh")]
@@ -475,11 +475,11 @@ def test_reconcile_prunes_terms_the_book_never_uses(tmp_path):
     says 'below ground'/'down there') is not a term: ignored, so it stops
     eating helper budget, prompt tokens and proxies. A used rendering
     ('Treasure') survives. Status-based: build_glossary has its own gates."""
-    from lorebridge.db import Database
-    from lorebridge.importers.base import store_chapters
-    from lorebridge.models import TerminologyEntry
-    from lorebridge.segment import ParsedChapter, to_html
-    from lorebridge.terminology import build_glossary, reconcile_glossary
+    from babelink.db import Database
+    from babelink.importers.base import store_chapters
+    from babelink.models import TerminologyEntry
+    from babelink.segment import ParsedChapter, to_html
+    from babelink.terminology import build_glossary, reconcile_glossary
 
     db = Database(tmp_path / "p.db")
     pid = db.create_project("t", source_lang="zh", target_lang="en")
@@ -504,7 +504,7 @@ def test_reconcile_prunes_terms_the_book_never_uses(tmp_path):
 def test_entity_mask_restore_roundtrip():
     """E09 unit: nested forms mask once (longest first), proxies restore to
     renderings, unknown proxies are reported not dropped, E12/E1 never collide."""
-    from lorebridge.entities import entities_for_segment, mask_entities, restore_proxies
+    from babelink.entities import entities_for_segment, mask_entities, restore_proxies
 
     glossary = {"林黛玉": "Dai Yu", "黛玉": "Dai Yu", "賈政": "Jia Zheng"}
     src = "黛玉去見賈政，林黛玉笑了。"
@@ -529,7 +529,7 @@ def test_entity_mask_restore_roundtrip():
 def test_frequent_drops_get_a_second_solo_roll(tmp_path):
     """賈赦-class drops at 100+ occurrences get two solo attempts; rare drops
     get one (bounded helper cost)."""
-    from lorebridge.terminology import build_glossary, suggest_term_translations, upsert_candidates
+    from babelink.terminology import build_glossary, suggest_term_translations, upsert_candidates
 
     class Flaky(MockProvider):
         def __init__(self):
@@ -553,7 +553,7 @@ def test_term_retry_rescues_batch_dropped_names(tmp_path):
     """Red Chamber ch3: 賈政/王夫人 fell out of 12-term batches (ignored, no
     rendering) but classify fine alone. Excerpt-present ignored terms get one
     solo second chance and return to suggested with a rendering."""
-    from lorebridge.terminology import build_glossary, suggest_term_translations, upsert_candidates
+    from babelink.terminology import build_glossary, suggest_term_translations, upsert_candidates
 
     class BatchDrops(MockProvider):
         def __init__(self):
@@ -582,7 +582,7 @@ def test_term_retry_rescues_batch_dropped_names(tmp_path):
 def test_term_retry_leaves_true_junk_ignored(tmp_path):
     """Second chance must not resurrect junk: 三日 stays ignored even when
     present, and true drops (如此) never enter the glossary."""
-    from lorebridge.terminology import build_glossary, suggest_term_translations, upsert_candidates
+    from babelink.terminology import build_glossary, suggest_term_translations, upsert_candidates
 
     class Honest(MockProvider):
         def suggest_terms(self, items, source_lang="zh", target_lang="en"):
@@ -604,7 +604,7 @@ def test_term_retry_leaves_true_junk_ignored(tmp_path):
 def test_helper_enforce_verdict_respected(tmp_path):
     """The helper's own enforce=false verdict ignores the term (but keeps the
     rendering stored), whatever the word lists say."""
-    from lorebridge.terminology import build_glossary, suggest_term_translations, upsert_candidates
+    from babelink.terminology import build_glossary, suggest_term_translations, upsert_candidates
 
     class Judge(MockProvider):
         def suggest_terms(self, items, source_lang="zh", target_lang="en"):
@@ -621,9 +621,9 @@ def test_helper_enforce_verdict_respected(tmp_path):
 def test_reconcile_elects_in_context_winner(tmp_path):
     """The book votes: 黛玉's segments converge on Daiyu (Da Yu nowhere) so
     Daiyu becomes enforced; a split term (Yucun 2/3) stays unenforced."""
-    from lorebridge.importers.base import store_chapters
-    from lorebridge.segment import ParsedChapter, to_html
-    from lorebridge.terminology import build_glossary, reconcile_glossary, suggest_term_translations, upsert_candidates
+    from babelink.importers.base import store_chapters
+    from babelink.segment import ParsedChapter, to_html
+    from babelink.terminology import build_glossary, reconcile_glossary, suggest_term_translations, upsert_candidates
 
     db, pid, _ = project(tmp_path, "x")
     doc = db.add_document(pid, "d", "eval", "d")
@@ -659,13 +659,13 @@ def test_reconcile_elects_in_context_winner(tmp_path):
 def test_finalize_rewrites_losing_renderings(tmp_path):
     """End of the vote loop: losers kept on reconcile, then normalize rewrites
     'Yu Village'->'Yucun' in machine outputs, leaves human-approved text."""
-    from lorebridge.importers.base import store_chapters
-    from lorebridge.review import edit_segment
-    from lorebridge.segment import ParsedChapter, to_html
-    from lorebridge.terminology import build_glossary, finalize_terms, suggest_term_translations, upsert_candidates
+    from babelink.importers.base import store_chapters
+    from babelink.review import edit_segment
+    from babelink.segment import ParsedChapter, to_html
+    from babelink.terminology import build_glossary, finalize_terms, suggest_term_translations, upsert_candidates
 
-    from lorebridge import service
-    from lorebridge.db import Database
+    from babelink import service
+    from babelink.db import Database
 
     db = Database(tmp_path / "d.db")  # no pasted chapter: segment order must match outs exactly
     pid = db.create_project("t", source_lang="zh", target_lang="en")
@@ -701,12 +701,12 @@ def test_finalize_rewrites_losing_renderings(tmp_path):
 
 def test_measure_drift_scores_book_consistency(tmp_path):
     """Drift: enforced 雨村=Yucun in 2/3 translated segments -> 66.7."""
-    from lorebridge.importers.base import store_chapters
-    from lorebridge.segment import ParsedChapter, to_html
-    from lorebridge.terminology import build_glossary, measure_drift
+    from babelink.importers.base import store_chapters
+    from babelink.segment import ParsedChapter, to_html
+    from babelink.terminology import build_glossary, measure_drift
 
-    from lorebridge.db import Database
-    from lorebridge.models import TerminologyEntry
+    from babelink.db import Database
+    from babelink.models import TerminologyEntry
 
     db = Database(tmp_path / "d.db")
     pid = db.create_project("t", source_lang="zh", target_lang="en")
@@ -723,9 +723,9 @@ def test_measure_drift_scores_book_consistency(tmp_path):
 def test_suggest_spends_budget_on_multichar_first(tmp_path):
     """Single-char function words (的/是) outrank names by count but must not eat
     the helper budget: multi-char terms classify first."""
-    from lorebridge.db import Database
-    from lorebridge.providers.base import MockProvider
-    from lorebridge.terminology import build_glossary, suggest_term_translations, upsert_candidates
+    from babelink.db import Database
+    from babelink.providers.base import MockProvider
+    from babelink.terminology import build_glossary, suggest_term_translations, upsert_candidates
 
     db = Database(tmp_path / "d.db")
     pid = db.create_project("t", source_lang="zh", target_lang="en")
@@ -746,9 +746,9 @@ def test_enforce_false_clean_rendering_becomes_vote_candidate(tmp_path):
     vote candidate so reconcile can elect it; junk ('Small Boy') is not."""
     import json
 
-    from lorebridge.db import Database
-    from lorebridge.providers.base import MockProvider
-    from lorebridge.terminology import suggest_term_translations, upsert_candidates
+    from babelink.db import Database
+    from babelink.providers.base import MockProvider
+    from babelink.terminology import suggest_term_translations, upsert_candidates
 
     db = Database(tmp_path / "d.db")
     pid = db.create_project("t", source_lang="zh", target_lang="en")
@@ -769,7 +769,7 @@ def test_title_pinyin_preserves_word_breaks():
     """Probe renderings become candidates verbatim-ish: 'LADY WANG' -> 'Lady
     Wang', never the distorted single token 'Ladywang' (letters-only tallying
     would elect the distortion over every correctly spaced output)."""
-    from lorebridge.terminology import _title_pinyin
+    from babelink.terminology import _title_pinyin
 
     assert _title_pinyin("yucun") == "Yucun"
     assert _title_pinyin("LADY WANG") == "Lady Wang"
@@ -782,11 +782,11 @@ def test_reconcile_prefers_verbatim_surface_of_winning_reading(tmp_path):
     adherence and future prompts use the natural form."""
     import json
 
-    from lorebridge.db import Database
-    from lorebridge.importers.base import store_chapters
-    from lorebridge.models import TerminologyEntry
-    from lorebridge.segment import ParsedChapter, to_html
-    from lorebridge.terminology import build_glossary, reconcile_glossary
+    from babelink.db import Database
+    from babelink.importers.base import store_chapters
+    from babelink.models import TerminologyEntry
+    from babelink.segment import ParsedChapter, to_html
+    from babelink.terminology import build_glossary, reconcile_glossary
 
     db = Database(tmp_path / "d.db")
     pid = db.create_project("t", source_lang="zh", target_lang="en")
@@ -808,11 +808,11 @@ def test_reconcile_mines_winner_from_outputs_not_candidates(tmp_path):
     surface, which no component proposed. Recorded twins become losers."""
     import json
 
-    from lorebridge.db import Database
-    from lorebridge.importers.base import store_chapters
-    from lorebridge.models import TerminologyEntry
-    from lorebridge.segment import ParsedChapter, to_html
-    from lorebridge.terminology import build_glossary, reconcile_glossary
+    from babelink.db import Database
+    from babelink.importers.base import store_chapters
+    from babelink.models import TerminologyEntry
+    from babelink.segment import ParsedChapter, to_html
+    from babelink.terminology import build_glossary, reconcile_glossary
 
     db = Database(tmp_path / "d.db")
     pid = db.create_project("t", source_lang="zh", target_lang="en")
@@ -833,7 +833,7 @@ def test_reconcile_mines_winner_from_outputs_not_candidates(tmp_path):
 def test_romaji_authority_rejects_misread_kanji_names():
     """ja twin of the pinyin authority: Unihan kun/on (+rendaku, +vowel fold)
     must cover the rendering; misreads never enforce, table gaps fail open."""
-    from lorebridge.terminology import _is_bad_translation, _pinyin_matches, _romaji_matches
+    from babelink.terminology import _is_bad_translation, _pinyin_matches, _romaji_matches
 
     assert _romaji_matches("田中", "Tanaka")
     assert _romaji_matches("山本", "Yamamoto")
@@ -859,10 +859,10 @@ def test_pinyin_authority_rejects_misread_names(tmp_path):
     雨村='Yu Jun' (cun≠jun) never enter the glossary even with enforce=true;
     correct readings (Daiyu, Dai Yu, Jia She, Yucun, Wang Furen) pass, and the
     dropped misreads leave no vote candidates."""
-    from lorebridge.db import Database
-    from lorebridge.terminology import (_is_bad_translation, _pinyin_matches, build_glossary,
+    from babelink.db import Database
+    from babelink.terminology import (_is_bad_translation, _pinyin_matches, build_glossary,
                                         suggest_term_translations, upsert_candidates)
-    from lorebridge.providers.base import MockProvider
+    from babelink.providers.base import MockProvider
     import json
 
     assert _pinyin_matches("黛玉", "Daiyu")
@@ -897,11 +897,11 @@ def test_seed_probe_candidates_rescues_helper_dropped_names(tmp_path):
     """E16: helper drops 賈赦 on every attempt (no verdict at all) — the MT
     model's own probe rendering seeds a vote candidate (phonetic-gated);
     probe hallucinations (Ujimura) never seed."""
-    from lorebridge.db import Database
-    from lorebridge.importers.base import store_chapters
-    from lorebridge.providers.base import MockProvider
-    from lorebridge.segment import ParsedChapter, to_html
-    from lorebridge.terminology import suggest_term_translations, upsert_candidates
+    from babelink.db import Database
+    from babelink.importers.base import store_chapters
+    from babelink.providers.base import MockProvider
+    from babelink.segment import ParsedChapter, to_html
+    from babelink.terminology import suggest_term_translations, upsert_candidates
     import json
 
     db = Database(tmp_path / "d.db")
@@ -929,9 +929,9 @@ def test_seed_probe_candidates_rescues_helper_dropped_names(tmp_path):
 def test_seed_probe_candidates_ja_romaji_and_caps(tmp_path):
     """E16 edges: ja probes seed through the romaji gate; min_occ/cap bound
     the spend; long probe rambles truncate to a name."""
-    from lorebridge.db import Database
-    from lorebridge.providers.base import MockProvider
-    from lorebridge.terminology import _seed_probe_candidates, upsert_candidates
+    from babelink.db import Database
+    from babelink.providers.base import MockProvider
+    from babelink.terminology import _seed_probe_candidates, upsert_candidates
     import json
 
     db = Database(tmp_path / "d.db")
@@ -964,12 +964,12 @@ def test_seed_probe_candidates_ja_romaji_and_caps(tmp_path):
 def test_review_confirmed_terms_flags_minority_enforcement(tmp_path):
     """Backward-revision trigger: 雨村 enforced 'Yu Jun' but shipped outputs say
     'Yucun' 3/3 -> flagged with the observed majority; a 2/3 term is not."""
-    from lorebridge.importers.base import store_chapters
-    from lorebridge.segment import ParsedChapter, to_html
-    from lorebridge.terminology import review_confirmed_terms
+    from babelink.importers.base import store_chapters
+    from babelink.segment import ParsedChapter, to_html
+    from babelink.terminology import review_confirmed_terms
 
-    from lorebridge.db import Database
-    from lorebridge.models import TerminologyEntry
+    from babelink.db import Database
+    from babelink.models import TerminologyEntry
 
     db = Database(tmp_path / "d.db")
     pid = db.create_project("t", source_lang="zh", target_lang="en")
@@ -990,7 +990,7 @@ def test_review_confirmed_terms_flags_minority_enforcement(tmp_path):
 def test_romaji_gate_for_japanese(tmp_path):
     """ja twin of the pinyin gate: transliteration-shaped renderings enforce
     only for names (シャリ=Shari kept as character, dropped as other)."""
-    from lorebridge.terminology import _is_bad_translation, _is_romaji_shaped
+    from babelink.terminology import _is_bad_translation, _is_romaji_shaped
 
     assert _is_romaji_shaped("Shari") and _is_romaji_shaped("Henri")
     assert not _is_romaji_shaped("Almeria") and not _is_romaji_shaped("Knight")
@@ -1001,10 +1001,10 @@ def test_romaji_gate_for_japanese(tmp_path):
 def test_demote_unused_terms(tmp_path):
     """A suggested term the model never applies gets demoted; applied and
     confirmed terms survive."""
-    from lorebridge.importers.base import store_chapters
-    from lorebridge.models import SegmentState
-    from lorebridge.segment import ParsedChapter, to_html
-    from lorebridge.terminology import build_glossary, demote_unused_terms, suggest_term_translations, upsert_candidates
+    from babelink.importers.base import store_chapters
+    from babelink.models import SegmentState
+    from babelink.segment import ParsedChapter, to_html
+    from babelink.terminology import build_glossary, demote_unused_terms, suggest_term_translations, upsert_candidates
 
     class Fixed(MockProvider):
         def suggest_terms(self, items, source_lang="zh", target_lang="en"):
@@ -1026,7 +1026,7 @@ def test_demote_unused_terms(tmp_path):
 
 
 def test_select_best_prefers_term_complete_draft():
-    from lorebridge.pipeline import select_best
+    from babelink.pipeline import select_best
 
     src = "林凡走進青雲宗。"
     hits = {"林凡": "Lin Fan", "青雲宗": "Azure Cloud Sect"}
@@ -1042,8 +1042,8 @@ def test_agreement_ignores_leading_articles(tmp_path):
     so agreement compares article-stripped. A real disagreement still demotes."""
     import json
 
-    from lorebridge.terminology import build_glossary, suggest_term_translations, upsert_candidates
-    from lorebridge.providers.base import MockProvider
+    from babelink.terminology import build_glossary, suggest_term_translations, upsert_candidates
+    from babelink.providers.base import MockProvider
     from test_quality import project
 
     class Helper(MockProvider):
@@ -1066,8 +1066,8 @@ def test_retry_prefers_bursty_names_over_diffuse_words(tmp_path):
     (bursty: many mentions, few passages) never got classified. Retry now
     spends diffuse-last, bursty-first — the mining dispersion statistic,
     applied to slot order."""
-    from lorebridge.terminology import suggest_term_translations, upsert_candidates
-    from lorebridge.providers.base import MockProvider
+    from babelink.terminology import suggest_term_translations, upsert_candidates
+    from babelink.providers.base import MockProvider
     from test_quality import project
 
     # 王夫人: 6 mentions in 2 passages (bursty). 那里: 6 mentions in 6 passages (diffuse).

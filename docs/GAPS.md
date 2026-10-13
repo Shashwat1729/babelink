@@ -7,7 +7,7 @@ What the spec describes but this repository does not do, and why. Nothing here i
 | Spec area | State | Reason / what is there instead |
 |---|---|---|
 | Desktop app (PySide6, §74) | not built | A local web UI covers the same workflow (ADR-009). No GUI toolkit dependency. |
-| Manga / manhua pipeline (§69, phase 6) | partly built (`images.py`, `[images]` extra) | OCR, bubble grouping, erase and typeset work for Chinese, English and (since E18) Korean lettering on horizontal text — Korean via external weights (`LOREBRIDGE_OCR_MODELS`), v1-mobile quality (~1 syllable in 4 misread). Proven on a real scanlation page (7/7 blocks, en→zh, 33s). Not built: Japanese OCR, vertical text, right-to-left order, speaker detection, model inpainting, panel detection. |
+| Manga / manhua pipeline (§69, phase 6) | partly built (`images.py`, `[images]` extra) | OCR, bubble grouping, erase and typeset work for Chinese, English and (since E18) Korean lettering on horizontal text — Korean via external weights (`BABELINK_OCR_MODELS`), v1-mobile quality (~1 syllable in 4 misread). Proven on a real scanlation page (7/7 blocks, en→zh, 33s). Not built: Japanese OCR, vertical text, right-to-left order, speaker detection, model inpainting, panel detection. |
 | DOCX import/export (§70, §78) | not built | EPUB, TXT, HTML and pasted text cover the target use. |
 | Vector / semantic retrieval for TM and context (§21, §73, §80) | not built | Retrieval is exact TM + entity overlap + recency + summaries, inside a size budget. Add an embedding index only if evaluation shows misses. |
 | LLM entity extraction and relationship / timeline graph (§11) | not built | Entities are entered by the user or come from mined terms; model-suggested renderings exist for terms, not for relationships. |

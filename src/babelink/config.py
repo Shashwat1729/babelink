@@ -1,6 +1,6 @@
 """Optional YAML configuration (spec §86).
 
-`<workspace>/lorebridge.yaml`, or `--config FILE`. Precedence: command-line flag > file > built-in default.
+`<workspace>/babelink.yaml`, or `--config FILE`. Precedence: command-line flag > file > built-in default.
 Unknown keys are an error, so a typo does not silently do nothing.
 
     provider: hymt                # mock | ollama | hymt | openai-compatible

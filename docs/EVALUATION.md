@@ -24,7 +24,7 @@ translation of long fiction? This page records what was measured, the numbers, a
 - **Noise.** Two identical runs of the same configuration differ by about 1 chrF. Differences under 1-2 points are not evidence.
 
 Reproduce: `python scripts/eval_heldout.py ZH.txt EN.txt --paragraphs 12 --configs ABDF` for one chapter pair, or
-`lorebridge eval-epub zh.epub en.epub --chapters 3` for two EPUBs.
+`babelink eval-epub zh.epub en.epub --chapters 3` for two EPUBs.
 
 ## 1. Held-out web novel (data the pipeline was not built on)
 

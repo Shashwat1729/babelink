@@ -1,12 +1,12 @@
 from pathlib import Path
 
-from lorebridge.db import Database
-from lorebridge.exporters.epub import _replace_paragraphs
-from lorebridge.exporters.txt import export_txt
-from lorebridge.importers import import_txt
-from lorebridge.models import Chapter, Segment, SegmentState
-from lorebridge.pipeline import analyze_project, translate_project
-from lorebridge.providers.base import MockProvider
+from babelink.db import Database
+from babelink.exporters.epub import _replace_paragraphs
+from babelink.exporters.txt import export_txt
+from babelink.importers import import_txt
+from babelink.models import Chapter, Segment, SegmentState
+from babelink.pipeline import analyze_project, translate_project
+from babelink.providers.base import MockProvider
 
 
 def test_replace_paragraphs_preserves_tag_attributes():

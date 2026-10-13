@@ -1,7 +1,7 @@
 """Failover chains: order, refusal-terminal, provenance. No network, no models."""
-from lorebridge.fallback import ChainProvider, resolve_chains
-from lorebridge.prompts import ProviderError, RefusalError
-from lorebridge.providers.base import MockProvider
+from babelink.fallback import ChainProvider, resolve_chains
+from babelink.prompts import ProviderError, RefusalError
+from babelink.providers.base import MockProvider
 
 
 class Down(MockProvider):
@@ -78,7 +78,7 @@ def test_resolve_chains_mt_gets_helper_fallback():
     def make(kind, model="", base_url=""):
         return MTStub() if kind == "hymt" else MockProvider()
 
-    import lorebridge.service as service
+    import babelink.service as service
     orig = service.helper_for
     service.helper_for = lambda provider, kind="", base_url="", helper_model="": MockProvider()
     try:
@@ -98,7 +98,7 @@ def test_resolve_chains_general_engine_stands_alone():
 def test_auto_picks_engine_per_direction():
     """'auto' resolves to CAT for ja->en (bake-off E04) and Hy-MT2 otherwise;
     an explicit kind never consults direction."""
-    from lorebridge import service
+    from babelink import service
 
     assert service.default_engine("ja", "en")[0] == "cat"
     assert service.default_engine("zh", "en")[0] == "hymt"
@@ -118,10 +118,10 @@ def test_auto_picks_engine_per_direction():
 def test_chain_translate_project_fails_over_mid_run(tmp_path):
     """A dead primary no longer aborts the book: per-segment failover inside
     the chain delivers every paragraph from the fallback engine."""
-    from lorebridge.db import Database
-    from lorebridge.importers.base import store_chapters
-    from lorebridge.pipeline import translate_project
-    from lorebridge.segment import ParsedChapter, to_html
+    from babelink.db import Database
+    from babelink.importers.base import store_chapters
+    from babelink.pipeline import translate_project
+    from babelink.segment import ParsedChapter, to_html
 
     db = Database(tmp_path / "c.db")
     pid = db.create_project("c", source_lang="zh", target_lang="en")
@@ -139,7 +139,7 @@ def test_chain_translate_project_fails_over_mid_run(tmp_path):
 def test_maybe_chain_policy():
     """The web job path and resolve_chains share one failover policy: only a
     translation-only engine with a differently-named helper gets wrapped."""
-    from lorebridge.fallback import ChainProvider, maybe_chain
+    from babelink.fallback import ChainProvider, maybe_chain
 
     class MTOnly(MockProvider):
         name = "hymt:x"

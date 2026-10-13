@@ -1,7 +1,7 @@
 """Hy-MT2 on Ollama (`ollama pull hf.co/tencent/Hy-MT2-1.8B-GGUF:Q4_K_M`).
 
 Translation-only model: translate() uses the official Hy-MT2 instruction
-format (see lorebridge.hymt) with the released sampling settings. The other
+format (see babelink.hymt) with the released sampling settings. The other
 ChatProvider tasks (refine/review/suggest_terms/summarize) still work through
 the generic prompts, but quality is poor compared to a general LLM — the
 service layer routes those tasks to a helper model (see service.helper_for),

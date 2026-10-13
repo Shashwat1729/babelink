@@ -234,15 +234,21 @@ helper `huihui_ai/qwen3-abliterated:4b` (4k ctx — 8k OOMs, see REGRESSIONS.md)
   the weakness; upgrade = newer ko rec weights, not code.
 - Real story pages won via Asura (static HTML, no wall): Nano Machine ch.1
   EN pp.2–3, 11/11 dialogue blocks OCR'd off webtoon art (spacing slips like
-  MYLEG kept — real lettering). The pages caught a live bug: fragmentary
-  screams ('DAMN IT ALL...') make Hy-MT2 echo the source with '=>' notes and
-  a [来源文本] marker (100-char dump into one bubble). Fixed in
-  `clean_output` (echo-marker strip, legit '=>' untouched) + regression test
-  with the exact string; re-run on the same pages stores 该死！！. README now
-  shows downscaled credited crops (raw | ours), not mockups.
-- NOT done: same-chapter ZH raw (MangaDex hosts no Chinese for this title;
-  Baozimh/Comick bot-walled) and Korean story pages (Nano Machine: covers
-  fetch fine, chapters render in JS — needs Playwright or a manual drop).
+  MYLEG kept — real lettering). Extended to all 4 pages: 21/21 blocks in 62s,
+  QA 21/21 passed with 5 warnings (the translator-notes table in the README
+  is this run's real output). The pages also caught a live bug: fragmentary
+  screams ('DAMN IT ALL...') make Hy-MT2 echo the source with '=>' notes,
+  sometimes with a [来源文本] marker (100-char dump into one bubble). Fixed
+  in `clean_output` (echo-marker strip + multi-'=>' cut, legit 'a => b'
+  untouched) + regression test with the exact strings.
+- Chinese raws won via manwaye/manwaxu APIs (`/api/comic/chapter/info`,
+  `/api/comic/image`): Martial Peak ch.1, 4 pages, images AES-CBC-encrypted
+  (key `BaseUtil.AES_KEY` in the reader JS — decrypted locally). Full zh→en
+  loop: 11/11 blocks in 37s, QA 11/11 passed, 0 warnings. README shows the
+  raw | ours pairs (downscaled, credited).
+- NOT done: Korean story pages (Nano Machine: covers fetch fine, chapters
+  render in JS — needs Playwright or a manual drop). Baozimh/Comick remain
+  bot-walled (no longer needed for Martial Peak).
   Stylized cover lettering defeats the v1-mobile model (0 lines on two real
   covers — brush strokes + vertical text, a documented OCR limit, not a
   regression). Hy-MT2 ko→en and ja→en smoke-tested clean (2s/1s).

@@ -5,11 +5,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from lorebridge.db import Database
-from lorebridge.importers import import_txt
-from lorebridge.pipeline import analyze_project, translate_project
-from lorebridge.providers.base import MockProvider
-from lorebridge.refinement import dropped_names, run_refinement
+from babelink.db import Database
+from babelink.importers import import_txt
+from babelink.pipeline import analyze_project, translate_project
+from babelink.providers.base import MockProvider
+from babelink.refinement import dropped_names, run_refinement
 
 tmp = Path(tempfile.mkdtemp(dir=r"D:\StoryTranslation_data\tmp"))
 

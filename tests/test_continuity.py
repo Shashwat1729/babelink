@@ -1,13 +1,13 @@
 """Chapter-wise paste must continue the project: glossary, TM, summaries and previous passages carry over."""
 import json
 
-from lorebridge import service
-from lorebridge.context import build_context
-from lorebridge.models import SegmentState
-from lorebridge.pipeline import translate_project
-from lorebridge.providers.base import MockProvider
-from lorebridge.story_bible import project_root, save_section
-from lorebridge.terminology import build_glossary, set_term
+from babelink import service
+from babelink.context import build_context
+from babelink.models import SegmentState
+from babelink.pipeline import translate_project
+from babelink.providers.base import MockProvider
+from babelink.story_bible import project_root, save_section
+from babelink.terminology import build_glossary, set_term
 
 CH1 = "林凡走进青云宗。\n\n林凡看见大师兄。\n\n大师兄对林凡说：“欢迎。”\n\n林凡点了点头。"
 CH2 = "林凡点了点头。\n\n林凡离开了山门。"  # first paragraph repeats chapter 1 -> exact TM hit

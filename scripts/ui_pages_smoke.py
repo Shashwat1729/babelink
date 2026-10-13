@@ -2,7 +2,7 @@
 fix an OCR slip, translate with the mock provider, paste a second image from the clipboard, download the CBZ,
 check the phone layout. Needs the `images` extra and a CJK font (scripts/make_sample_page.py draws the page).
 
-    LOREBRIDGE_HOME=eval_runs/ui_ws python -m uvicorn lorebridge.web:app --port 8765 &
+    BABELINK_HOME=eval_runs/ui_ws python -m uvicorn babelink.web:app --port 8765 &
     python scripts/ui_pages_smoke.py --url http://127.0.0.1:8765 --out eval_runs/ui_pages
 """
 import argparse

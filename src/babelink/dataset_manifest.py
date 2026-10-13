@@ -1,5 +1,5 @@
 """Dataset license manifest (spec §46, §54): every corpus used for evaluation records where it came from and
-what may be done with it. `lorebridge datasets --check` fails when a field is missing."""
+what may be done with it. `babelink datasets --check` fails when a field is missing."""
 from __future__ import annotations
 
 REQUIRED = ("id", "name", "languages", "license", "allowed_for_redistribution", "allowed_for_training", "source_url", "notes")

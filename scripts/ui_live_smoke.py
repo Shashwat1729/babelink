@@ -2,7 +2,7 @@
 finished paragraphs show up before the job ends, Stop works mid-paragraph, a double click adds and translates once,
 the batch picker sends a word limit. Needs a running Ollama with the model; takes a few minutes on CPU.
 
-    LOREBRIDGE_HOME=eval_runs/ui_live_ws python -m uvicorn lorebridge.web:app --port 8765 &
+    BABELINK_HOME=eval_runs/ui_live_ws python -m uvicorn babelink.web:app --port 8765 &
     python scripts/ui_live_smoke.py --url http://127.0.0.1:8765 --model huihui_ai/qwen3-abliterated:4b --out eval_runs/ui_live
 """
 import argparse

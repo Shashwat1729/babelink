@@ -1,5 +1,5 @@
-from lorebridge.escalation import escalation_needed
-from lorebridge.failure_corpus import add_case, load_cases
+from babelink.escalation import escalation_needed
+from babelink.failure_corpus import add_case, load_cases
 
 
 def test_escalation_signals():

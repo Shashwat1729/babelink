@@ -8,7 +8,7 @@ from .html import import_html  # noqa: F401
 from .paste import import_paste  # noqa: F401
 from .txt import import_txt  # noqa: F401
 
-IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}   # comic pages -> lorebridge.images (needs the [images] extra)
+IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}   # comic pages -> babelink.images (needs the [images] extra)
 ARCHIVE_EXT = {".cbz", ".zip"}
 
 

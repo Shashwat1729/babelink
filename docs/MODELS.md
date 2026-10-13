@@ -14,7 +14,7 @@ out-translates general 4B chat LLMs on zh/ja→en fiction while running on CPU:
 ```bash
 ollama pull hf.co/tencent/Hy-MT2-1.8B-GGUF:Q4_K_M
 ollama create hymt2-1.8b -f Modelfile.hymt2   # installs the official chat template
-lorebridge translate --provider hymt   # --model defaults to hymt2-1.8b
+babelink translate --provider hymt   # --model defaults to hymt2-1.8b
 ```
 
 Notes that cost real debugging time:
@@ -35,9 +35,9 @@ Notes that cost real debugging time:
 
 ## Registry
 
-`lorebridge models --target-lang en` prints hardware-aware recommendations
+`babelink models --target-lang en` prints hardware-aware recommendations
 (translation-specialized models rank first for translation).
-The starter registry in `src/lorebridge/registry.py` ships a few known models;
+The starter registry in `src/babelink/registry.py` ships a few known models;
 extend it as you add models.
 
 ## Abliterated models
@@ -59,7 +59,7 @@ your content does not trigger refusals.
 - **Refinement** — same or stronger general model (never the MT model)
 - **QA** — small model + deterministic checks
 
-Configure a model per task in `lorebridge.yaml` (`models: {translate: ..., refine: ...}`).
+Configure a model per task in `babelink.yaml` (`models: {translate: ..., refine: ...}`).
 
 ## Escalation (spec §10)
 

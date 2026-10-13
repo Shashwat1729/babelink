@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from lorebridge.db import Database  # noqa: E402
+from babelink.db import Database  # noqa: E402
 
 CJK = re.compile(r"[一-鿿぀-ヿ가-힯]")
 db = Database(sys.argv[1])

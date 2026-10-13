@@ -1,4 +1,4 @@
-"""lorebridge CLI (spec §85).
+"""babelink CLI (spec §85).
 
 One workspace directory (`--project-dir`) holds project.db and, per project, a story_bible/ folder.
 """
@@ -79,9 +79,9 @@ def _progress(done: int, total: int, text: str) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="lorebridge")
+    p = argparse.ArgumentParser(prog="babelink")
     p.add_argument("--project-dir", default="project", help="Workspace directory (project.db + story bibles)")
-    p.add_argument("--config", help="YAML config (default: <project-dir>/lorebridge.yaml if present)")
+    p.add_argument("--config", help="YAML config (default: <project-dir>/babelink.yaml if present)")
     sub = p.add_subparsers(dest="command", required=True)
 
     sub.add_parser("projects", help="List projects")
@@ -214,15 +214,15 @@ def main(argv: list[str] | None = None) -> int:
             stream.reconfigure(errors="replace")
     args = build_parser().parse_args(argv)
     cmd = args.command
-    config.apply(args, config.load(args.config or Path(args.project_dir) / "lorebridge.yaml", required=bool(args.config)))
+    config.apply(args, config.load(args.config or Path(args.project_dir) / "babelink.yaml", required=bool(args.config)))
 
     if cmd == "web":
         import os
 
         import uvicorn
 
-        os.environ["LOREBRIDGE_HOME"] = str(Path(args.project_dir).resolve())
-        uvicorn.run("lorebridge.web:app", host=args.host, port=args.port, reload=False)
+        os.environ["BABELINK_HOME"] = str(Path(args.project_dir).resolve())
+        uvicorn.run("babelink.web:app", host=args.host, port=args.port, reload=False)
         return 0
 
     if cmd == "models":

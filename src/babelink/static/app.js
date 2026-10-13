@@ -50,7 +50,7 @@ function icon(name) {
 }
 
 async function api(method, path, body, headers) {
-  const opt = { method, headers: { "X-Requested-With": "lorebridge", ...headers } };
+  const opt = { method, headers: { "X-Requested-With": "babelink", ...headers } };
   if (body instanceof FormData) opt.body = body;
   else if (body !== undefined) { opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(body); }
   const r = await fetch(path, opt);
@@ -251,10 +251,10 @@ function render() {
 
 function renderCrumbs() {
   const c = clear($("#crumbs")), r = S.route, sep = () => el("span", { class: "sep", "aria-hidden": "true" }, "/");
-  let title = "Lorebridge";
+  let title = "Babelink";
   if (r.view !== "library" && S.project) {
     c.append(el("a", { href: "#/" }, "Library"), sep());
-    if (r.view === "work") { c.append(el("span", { class: "here", "aria-current": "page" }, S.project.name)); title = S.project.name + " · Lorebridge"; }
+    if (r.view === "work") { c.append(el("span", { class: "here", "aria-current": "page" }, S.project.name)); title = S.project.name + " · Babelink"; }
     else {
       const i = S.chapters.findIndex((x) => x.id === r.cid);
       c.append(el("a", { href: `#/work/${S.pid}` }, S.project.name), sep(), el("span", { class: "here", "aria-current": "page" }, `Chapter ${i + 1}`));

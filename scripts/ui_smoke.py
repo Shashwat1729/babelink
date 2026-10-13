@@ -3,7 +3,7 @@ mock provider, review names, edit/approve, paste a follow-up chapter, run checks
 accent, open the model picker, check the phone layout, delete the work. Screenshots go to --out.
 Needs `pip install playwright` and a Chromium (set CHROMIUM=<path to chrome.exe> to reuse an installed one).
 
-    LOREBRIDGE_HOME=eval_runs/ui_ws python -m uvicorn lorebridge.web:app --port 8765 &
+    BABELINK_HOME=eval_runs/ui_ws python -m uvicorn babelink.web:app --port 8765 &
     python scripts/ui_smoke.py --url http://127.0.0.1:8765 --out eval_runs/ui
 """
 import argparse

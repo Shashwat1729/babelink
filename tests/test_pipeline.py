@@ -3,14 +3,14 @@ from pathlib import Path
 import pytest
 from ebooklib import epub
 
-from lorebridge.db import Database
-from lorebridge.exporters.epub import export_epub
-from lorebridge.importers import import_epub, import_txt
-from lorebridge.importers.base import store_chapters
-from lorebridge.pipeline import analyze_project, translate_project
-from lorebridge.providers.base import MockProvider
-from lorebridge.segment import ParsedChapter, chapters_from_text, to_html
-from lorebridge.terminology import mine_terms
+from babelink.db import Database
+from babelink.exporters.epub import export_epub
+from babelink.importers import import_epub, import_txt
+from babelink.importers.base import store_chapters
+from babelink.pipeline import analyze_project, translate_project
+from babelink.providers.base import MockProvider
+from babelink.segment import ParsedChapter, chapters_from_text, to_html
+from babelink.terminology import mine_terms
 
 
 def make_epub(path: Path) -> None:
@@ -91,7 +91,7 @@ def test_wrapped_paragraph_is_not_taken_as_chapter_subtitle():
 
 def test_translate_auto_suggests_when_glossary_empty(tmp_path):
     """Upload-and-go: translate classifies terms itself when nobody suggested yet."""
-    from lorebridge.terminology import build_glossary, upsert_candidates
+    from babelink.terminology import build_glossary, upsert_candidates
 
     class Terms(MockProvider):
         def suggest_terms(self, items, source_lang="zh", target_lang="en"):
@@ -114,8 +114,8 @@ def test_placeholders_restore_renderings_structurally(tmp_path):
     """E09 pipeline: with the placeholders feature the MT model sees proxies
     (MockProvider echoes them back), renderings are restored post-draw, and
     the stored output carries the name even though no prompt hint was sent."""
-    from lorebridge.models import TerminologyEntry
-    from lorebridge.terminology import build_glossary
+    from babelink.models import TerminologyEntry
+    from babelink.terminology import build_glossary
 
     db = Database(tmp_path / "ph.db")
     pid = db.create_project("t", source_lang="zh", target_lang="en")
@@ -135,7 +135,7 @@ def test_placeholders_restore_renderings_structurally(tmp_path):
 def test_split_long_pieces_and_rejoin(tmp_path):
     """E13 unit: short text passes through as one piece; long text splits on
     sentence boundaries and rejoins (MockProvider echoes source)."""
-    from lorebridge.segment import split_long
+    from babelink.segment import split_long
 
     assert split_long("黛玉去了。", 300) == ["黛玉去了。"]
     long = "黛玉去了。" + "賈政問話。" * 200
@@ -162,8 +162,8 @@ def test_translate_split_pieces_rejoins_one_segment(tmp_path):
 
 def test_translate_skips_suggest_with_mt_only_translator(tmp_path):
     """An MT-only translator alone must not classify (it cannot); glossary stays empty."""
-    from lorebridge.providers.hymt_ollama import HymtOllamaProvider
-    from lorebridge.terminology import build_glossary, upsert_candidates
+    from babelink.providers.hymt_ollama import HymtOllamaProvider
+    from babelink.terminology import build_glossary, upsert_candidates
 
     db = Database(tmp_path / "mt.db")
     pid = db.create_project("t", source_lang="zh", target_lang="en")
@@ -184,8 +184,8 @@ def test_translate_skips_suggest_with_mt_only_translator(tmp_path):
 def test_retarget_inherits_story_graph_without_renderings(tmp_path):
     """A second target language starts from the same source: term forms and
     concepts carry over, renderings are re-done; translations/TM stay behind."""
-    from lorebridge import service
-    from lorebridge.terminology import build_glossary, upsert_candidates
+    from babelink import service
+    from babelink.terminology import build_glossary, upsert_candidates
 
     db = Database(tmp_path / "r.db")
     pid = db.create_project("t", source_lang="zh", target_lang="en")
@@ -193,7 +193,7 @@ def test_retarget_inherits_story_graph_without_renderings(tmp_path):
     paras = ["羅天來了。", "羅天去了。"]
     cids = store_chapters(db, pid, doc, [ParsedChapter("c", to_html(paras), paras)])
     upsert_candidates(db, pid, [("羅天", 2)])
-    from lorebridge.models import TerminologyEntry
+    from babelink.models import TerminologyEntry
     db.add_terminology(TerminologyEntry(None, pid, ["羅天"], {"en": "Luo Tian"}, "character", "preferred", "confirmed", 2))
     npid = service.retarget(db, pid, "ja", "t-ja")
     assert db.get_project(npid)["target_lang"] == "ja"

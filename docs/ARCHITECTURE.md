@@ -21,8 +21,8 @@ Each stage: pure function over typed artifacts where possible, persisted between
 ## Repository Layout (from spec §94, adapted)
 
 ```
-lorebridge/
-├── apps/cli            # `lorebridge` headless entry (Phase 1)
+babelink/
+├── apps/cli            # `babelink` headless entry (Phase 1)
 ├── apps/desktop        # PySide6 (later)
 ├── core/               # projects, documents, segmentation, entities,
 │                       # terminology, story_bible, translation_memory,
@@ -40,7 +40,7 @@ lorebridge/
 
 ## Implemented layout
 
-The tree above is the target from spec §94. The repository today is a single package: `src/lorebridge/` with `service.py` (operations shared by CLI and web),
+The tree above is the target from spec §94. The repository today is a single package: `src/babelink/` with `service.py` (operations shared by CLI and web),
 `cli.py`, `web.py` + `static/`, `config.py`, `pipeline.py`, `context.py`, `terminology.py`, `story_bible.py`, `qa.py`, `refinement.py`, `review.py`,
 `importers/`, `exporters/`, `providers/`, `images.py` (comic pages, optional `[images]` extra) and the evaluation modules. See DEVELOPMENT.md.
 

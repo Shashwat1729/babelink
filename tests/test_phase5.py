@@ -1,9 +1,9 @@
 import json
 from pathlib import Path
 
-from lorebridge.datasets import LocalFileAdapter
-from lorebridge.eval import run_benchmark, write_leaderboard
-from lorebridge.providers.base import MockProvider
+from babelink.datasets import LocalFileAdapter
+from babelink.eval import run_benchmark, write_leaderboard
+from babelink.providers.base import MockProvider
 
 
 def test_local_adapter_and_eval(tmp_path: Path):

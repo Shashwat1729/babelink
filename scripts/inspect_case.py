@@ -6,13 +6,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from lorebridge.db import Database
+from babelink.db import Database
 
 db = Database(sys.argv[1])
 chapter = int(sys.argv[2]) if len(sys.argv) > 2 else 0
 pid = db.conn.execute("SELECT MAX(id) AS m FROM projects").fetchone()["m"]
 print(f"latest project: {pid}")
-from lorebridge.terminology import build_glossary  # noqa: E402
+from babelink.terminology import build_glossary  # noqa: E402
 
 gloss = build_glossary(db, pid)
 print(f"== effective glossary today: {len(gloss)} entries ==")

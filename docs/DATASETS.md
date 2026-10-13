@@ -11,7 +11,7 @@ One JSON object per line:
 ## Running a benchmark
 
 ```bash
-lorebridge benchmark-run data/eval.jsonl --provider ollama --model huihui_ai/qwen3-abliterated --out leaderboard.md
+babelink benchmark-run data/eval.jsonl --provider ollama --model huihui_ai/qwen3-abliterated --out leaderboard.md
 ```
 
 ## Legal posture (spec §46, §54)
@@ -23,8 +23,8 @@ Every dataset must record license fields before use. Redistribution requires
 ## Real-corpus evaluation set (public domain, spec §46, §51)
 
 `python scripts/fetch_corpus.py` downloads Project Gutenberg EPUBs into `corpus/` (git-ignored, never redistributed by this repo).
-`lorebridge datasets` prints the manifest (`src/lorebridge/dataset_manifest.py`): id, licence, redistribution flag, source URL.
-`lorebridge datasets --check` exits 1 if an entry lacks a licence field.
+`babelink datasets` prints the manifest (`src/babelink/dataset_manifest.py`): id, licence, redistribution flag, source URL.
+`babelink datasets --check` exits 1 if an entry lacks a licence field.
 
 | id | Language | Work | Use |
 |---|---|---|---|
@@ -65,7 +65,7 @@ shows what the model does versus what the harness adds.
 | Source | Status | Notes |
 |---|---|---|
 | MangaDex API (Martial Peak ch.1 EN) | fetched 2 pages | clean JSON API + direct image CDN; the real-page loop proof |
-| MangaDex zh / zh-hk (same title) | none exist | licensed title — no Chinese scanlations hosted at all |
+| Martial Peak ch.1 ZH (manwaye/manwaxu) | fetched via chapter-info + image APIs; images AES-CBC (key in reader JS) | decrypted locally, full zh→en loop run |
 | Comick.io API search | endpoint shape changed (404) | would need re-discovery; deprioritized after MangaDex worked |
 | Baozimh web search | 403 bot wall | app-endpoint pattern known but gated; needs session handling |
 | Nano Machine Korean story pages (manhwa18x-class sites) | JS-rendered readers: only covers in static HTML | needs Playwright fetch (available in dev extras) or manual raw drop; OCR + ko→en engine already proven |
@@ -74,7 +74,7 @@ Protocol for your own raws: drop page images in a folder, import as a `ko`/`zh` 
 translate, export CBZ; score OCR blocks against a manual transcript and translations
 against the licensed/fan text with `scripts/eval_harness_vs_bare.py`-style bubble pairing.
 
-All of these are in `lorebridge datasets` with their licence fields; none is redistributed by this repository. Licence statements come from
+All of these are in `babelink datasets` with their licence fields; none is redistributed by this repository. Licence statements come from
 the linked paper or dataset page when the research was done (2026-10-07). Check the current terms before downloading.
 
 ### Chinese web novels and long-form fiction (text pipeline)

@@ -55,6 +55,8 @@ def clean_output(text: str) -> str:
     if m:  # the source with '=>' alignment notes ('该死！！ => ...') — keep the translation, drop the echo
         text = text[:m.start()]
         text = re.split(r"\s*=>", text, maxsplit=1)[0]
+    elif text.count("=>") >= 2:  # same dump without the marker (nondeterministic): first fragment is the translation
+        text = re.split(r"\s*=>", text, maxsplit=1)[0]
     return _LABEL.sub("", text).strip()
 
 

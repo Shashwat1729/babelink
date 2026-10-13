@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-import lorebridge.hymt as _hymt  # noqa: F401  (keeps prompt format in one place)
+import babelink.hymt as _hymt  # noqa: F401  (keeps prompt format in one place)
 from .. import prompts
 from ..hymt import SAMPLING, is_mt_model, mt_prompt
 from .base import ChatProvider, Delta, auto_max_tokens

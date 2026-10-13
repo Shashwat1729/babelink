@@ -4,9 +4,9 @@ import json
 
 import pytest
 
-from lorebridge import config, service
-from lorebridge.cli import main
-from lorebridge.providers.base import MockProvider
+from babelink import config, service
+from babelink.cli import main
+from babelink.providers.base import MockProvider
 
 BOOK = "第一章 开始\n\n林凡走进青云宗。\n\n林凡看见大师兄。\n\n林凡点了点头。\n"
 NEXT = "第二章 山门\n\n林凡离开了山门。\n"
@@ -54,11 +54,11 @@ def test_unknown_project_and_datasets(tmp_path):
 
 def test_config_file_defaults_and_flag_precedence(tmp_path, monkeypatch):
     (tmp_path / "ws").mkdir()
-    (tmp_path / "ws" / "lorebridge.yaml").write_text(
+    (tmp_path / "ws" / "babelink.yaml").write_text(
         "provider: ollama\nmodel: base\nmodels: {translate: big}\ntarget_lang: fr\nstyle: literary\nn_prev: 5\n", encoding="utf-8")
     seen = {}
-    monkeypatch.setattr("lorebridge.cli._provider", lambda a: seen.update(provider=a.provider, model=a.model) or MockProvider())
-    monkeypatch.setattr("lorebridge.cli.translate_project", lambda *a, **kw: seen.update(n_prev=kw["n_prev"], summarize=kw["summarize"]) or 0)
+    monkeypatch.setattr("babelink.cli._provider", lambda a: seen.update(provider=a.provider, model=a.model) or MockProvider())
+    monkeypatch.setattr("babelink.cli.translate_project", lambda *a, **kw: seen.update(n_prev=kw["n_prev"], summarize=kw["summarize"]) or 0)
     book = tmp_path / "b.txt"
     book.write_text(BOOK, encoding="utf-8")
     assert run(tmp_path, "import", str(book), "--name", "D", "--source-lang", "zh") == 0

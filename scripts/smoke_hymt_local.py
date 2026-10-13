@@ -11,7 +11,7 @@ os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from lorebridge import service  # noqa: E402
+from babelink import service  # noqa: E402
 
 t0 = time.time()
 p = service.make_provider("hymt-local", "tencent/Hy-MT2-1.8B")

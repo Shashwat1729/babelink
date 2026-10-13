@@ -1,6 +1,6 @@
-from lorebridge.registry import recommend
-from lorebridge.benchmark import benchmark
-from lorebridge.providers.base import MockProvider
+from babelink.registry import recommend
+from babelink.benchmark import benchmark
+from babelink.providers.base import MockProvider
 
 
 def test_recommend_filters_language():

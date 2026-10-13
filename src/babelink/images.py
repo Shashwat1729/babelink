@@ -5,7 +5,7 @@ Story Bible apply exactly as for prose) plus its pixel box in `regions`. render_
 typesets the translation into the same bubble; export_pages() bundles every page as a CBZ.
 
 OCR is RapidOCR (PP-OCR models on ONNX Runtime, CPU, Chinese + English); Korean pages use a Korean rec model
-from LOREBRIDGE_OCR_MODELS when present. Japanese pages still need another recognizer.
+from BABELINK_OCR_MODELS when present. Japanese pages still need another recognizer.
 """
 from __future__ import annotations
 
@@ -45,16 +45,16 @@ def _deps():
         import numpy as np
         from PIL import Image, ImageDraw, ImageFont
     except ImportError as e:  # pragma: no cover
-        raise RuntimeError("image support needs: pip install 'lorebridge[images]'") from e
+        raise RuntimeError("image support needs: pip install 'babelink[images]'") from e
     return cv2, np, Image, ImageDraw, ImageFont
 
 
 # ---- OCR ----------------------------------------------------------------------------------------------
 # Recognition models beyond Chinese+English live outside the repo (C: is small
-# on dev machines): LOREBRIDGE_OCR_MODELS points at a folder holding e.g.
+# on dev machines): BABELINK_OCR_MODELS points at a folder holding e.g.
 # korean_mobile_v2.0_rec_infer.onnx + korean_dict.txt. Missing files fail soft
 # back to the default engine — a page is never refused for its script.
-_OCR_MODEL_DIR = Path(os.environ.get("LOREBRIDGE_OCR_MODELS", r"D:\StoryTranslation_data\ocr_models"))
+_OCR_MODEL_DIR = Path(os.environ.get("BABELINK_OCR_MODELS", r"D:\StoryTranslation_data\ocr_models"))
 _engines: dict[str, object] = {}
 
 
@@ -84,7 +84,7 @@ def _ocr_engine(lang: str = ""):
         try:
             from rapidocr_onnxruntime import RapidOCR
         except ImportError as e:  # pragma: no cover
-            raise RuntimeError("image support needs: pip install 'lorebridge[images]'") from e
+            raise RuntimeError("image support needs: pip install 'babelink[images]'") from e
         if key == "ko":
             cfg = _korean_config()
             _engines[key] = RapidOCR(config_path=cfg) if cfg else RapidOCR()
@@ -254,7 +254,7 @@ def page_path(db: Database, chapter_id: int) -> Path:
 # ---- render ------------------------------------------------------------------------------------------
 def _font(size: int, cjk: bool):
     *_, ImageFont = _deps()
-    if p := os.environ.get("LOREBRIDGE_FONT"):
+    if p := os.environ.get("BABELINK_FONT"):
         return ImageFont.truetype(p, size)
     for d in _FONT_DIRS:
         for name in (_CJK_FONTS if cjk else _FONTS):

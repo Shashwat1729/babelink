@@ -83,13 +83,13 @@ Format: Date / Decision / Context / Consequences.
 
 **Decision:** Ship a FastAPI app serving a dependency-free HTML/CSS/JS page (`web.py`, `static/`) over the same `service.py` functions the CLI uses. One workspace directory holds `project.db`, `projects/<id>/story_bible/` and `uploads/<id>/`. Long operations run as one background job per project (HTTP 409 if one is already running) that the page polls. Security for a local server: loopback `Host` allow-list (DNS rebinding), `X-Requested-With` header on writes (CSRF), upload extension allow-list, size cap, sanitised names, text-only DOM updates, `no-store`, `nosniff`.
 
-**Consequences:** No GUI toolkit; the UI works on a phone over a tunnel if the user opts in (`LOREBRIDGE_HOSTS`). The server is single-user and unauthenticated by design. A desktop shell can wrap the same API later.
+**Consequences:** No GUI toolkit; the UI works on a phone over a tunnel if the user opts in (`BABELINK_HOSTS`). The server is single-user and unauthenticated by design. A desktop shell can wrap the same API later.
 
 ## ADR-010 — 2026-10-07 — Configuration file: flag > file > default, unknown keys rejected
 
 **Context:** Spec §86 asks for a readable config for languages, mode, models per task, context size.
 
-**Decision:** Optional `<workspace>/lorebridge.yaml` or `--config`. Options not given on the command line are filled from the file, then from built-in defaults (`config.py`). Unknown keys, bad providers/styles and bad `models` task names stop the run with a message. Only settings that are wired into behaviour are accepted; QA thresholds and terminology enforcement switches are not (see GAPS.md).
+**Decision:** Optional `<workspace>/babelink.yaml` or `--config`. Options not given on the command line are filled from the file, then from built-in defaults (`config.py`). Unknown keys, bad providers/styles and bad `models` task names stop the run with a message. Only settings that are wired into behaviour are accepted; QA thresholds and terminology enforcement switches are not (see GAPS.md).
 
 **Consequences:** A typo cannot silently do nothing. Adding a key means wiring it first.
 
@@ -125,11 +125,11 @@ Format: Date / Decision / Context / Consequences.
 
 **Consequences:** Text is visible within seconds and finished work is readable before the job ends. The idempotency cache lives in the server process, so it does not survive a restart and does not span several server processes; two CLI runs on one project are not guarded against each other. Streaming was checked in a browser against Ollama only; the OpenAI-compatible stream is covered by a unit test with a fake stream, not by a live endpoint. The batch picker applies to the work-wide button, not the per-chapter one.
 
-## ADR-014 — 2026-10-07 — Project renamed from "Story Translate" to Lorebridge
+## ADR-014 — 2026-10-07 — Project renamed from "Story Translate" to Lorebridge (2026-10-13: Lorebridge → Babelink, same rules)
 
 **Context:** "Story Translate" described one of the two inputs (text) and was generic. The project now handles novels, EPUBs and comics, and its core idea is carrying story memory (the lore) across chapters and languages.
 
-**Decision:** Name, package, CLI command, environment variables (`LOREBRIDGE_HOME`, `LOREBRIDGE_HOSTS`, `LOREBRIDGE_FONT`) and config file (`lorebridge.yaml`) all use `lorebridge`. The name was free on PyPI and GitHub when checked. Old names are not kept as aliases: there are no external users yet.
+**Decision:** Name, package, CLI command, environment variables (`BABELINK_HOME`, `BABELINK_HOSTS`, `BABELINK_FONT`) and config file (`babelink.yaml`) all use `babelink`. The name was free on PyPI and GitHub when checked. Old names are not kept as aliases: there are no external users yet.
 
-**Consequences:** Anyone with a workspace from before the rename keeps working data (`project.db` is unchanged) but must set `LOREBRIDGE_HOME` and rename `storytranslate.yaml` if they had one.
+**Consequences:** Anyone with a workspace from before the rename keeps working data (`project.db` is unchanged) but must set `BABELINK_HOME` and rename `storytranslate.yaml` if they had one.
 

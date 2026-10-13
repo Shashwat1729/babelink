@@ -11,7 +11,7 @@ for stream in (sys.stdout, sys.stderr):  # legacy Windows console (cp1252) canno
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from lorebridge import service
+from babelink import service
 
 model = sys.argv[sys.argv.index("--model") + 1] if "--model" in sys.argv else service.DEFAULT_TRANSLATE_MODEL
 p = service.make_provider("hymt", model)

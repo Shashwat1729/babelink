@@ -5,14 +5,14 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from lorebridge import service, web
-from lorebridge.pipeline import count_words, take_words, translate_project
-from lorebridge.providers.base import MockProvider
-from lorebridge.providers.ollama import OllamaProvider
-from lorebridge.providers.openai_compatible import OpenAICompatibleProvider
-from lorebridge.story_bible import project_root
+from babelink import service, web
+from babelink.pipeline import count_words, take_words, translate_project
+from babelink.providers.base import MockProvider
+from babelink.providers.ollama import OllamaProvider
+from babelink.providers.openai_compatible import OpenAICompatibleProvider
+from babelink.story_bible import project_root
 
-H = {"X-Requested-With": "lorebridge"}
+H = {"X-Requested-With": "babelink"}
 PARAS = ["林凡走进青云宗。", "大师兄说：“欢迎。”", "林凡点了点头。", "他们一起走了。"]  # 7, 6, 6, 6 CJK characters (punctuation is not a word)
 
 
@@ -156,7 +156,7 @@ def test_chat_provider_only_streams_when_asked(monkeypatch):
 
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("LOREBRIDGE_HOME", str(tmp_path))
+    monkeypatch.setenv("BABELINK_HOME", str(tmp_path))
     web.JOBS.clear()
     return TestClient(web.app)
 
@@ -307,7 +307,7 @@ class Interfering(MockProvider):
 
 
 def test_translate_never_overwrites_a_paragraph_a_person_edited_meanwhile(tmp_path):
-    from lorebridge.review import edit_segment
+    from babelink.review import edit_segment
 
     db, pid, root = project(tmp_path)
     ids = [s["id"] for s in db.open_segments(pid)]
@@ -325,8 +325,8 @@ def test_translate_never_overwrites_a_paragraph_a_person_edited_meanwhile(tmp_pa
 
 
 def test_refine_never_overwrites_a_paragraph_a_person_edited_meanwhile(tmp_path):
-    from lorebridge.refinement import run_refinement
-    from lorebridge.review import edit_segment
+    from babelink.refinement import run_refinement
+    from babelink.review import edit_segment
 
     db, pid, root = project(tmp_path)
     translate_project(db, pid, MockProvider(), project_dir=root)

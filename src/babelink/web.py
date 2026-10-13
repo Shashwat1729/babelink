@@ -1,9 +1,9 @@
 """Web UI: FastAPI JSON API + static single-page app (spec §73). Local-first: binds to 127.0.0.1 by default.
 
 Safety model (no accounts, one local user):
-- every mutating /api call needs the `X-Requested-With: lorebridge` header, so another website cannot
+- every mutating /api call needs the `X-Requested-With: babelink` header, so another website cannot
   drive it from the user's browser (a cross-site form or fetch cannot set that header without a CORS preflight)
-- the Host header must be a loopback name (blocks DNS rebinding); LOREBRIDGE_HOSTS adds more, comma-separated
+- the Host header must be a loopback name (blocks DNS rebinding); BABELINK_HOSTS adds more, comma-separated
 - uploads: extension whitelist, size cap, server-chosen file name
 - the frontend writes data with textContent only
 """
@@ -51,25 +51,25 @@ from .story_bible import SECTIONS, load_section, project_root, save_section
 from .terminology import build_glossary, set_term, suggest_term_translations, sync_bible
 
 STATIC = Path(__file__).parent / "static"
-CSRF_HEADER = ("x-requested-with", "lorebridge")
+CSRF_HEADER = ("x-requested-with", "babelink")
 MAX_UPLOAD = 64 * 1024 * 1024
 TEXT_EXT = {".epub", ".txt", ".html", ".htm", ".xhtml", ".md"}
 PAGE_EXT = IMAGE_EXT | ARCHIVE_EXT  # comic pages: OCR'd in a background job
 UPLOAD_EXT = TEXT_EXT | PAGE_EXT
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1", "testserver"}
 
-app = FastAPI(title="Lorebridge", docs_url=None, redoc_url=None)
+app = FastAPI(title="Babelink", docs_url=None, redoc_url=None)
 
 
 def workspace() -> Path:
-    """Read per request so tests and `lorebridge web --project-dir` can point it elsewhere."""
-    return Path(os.environ.get("LOREBRIDGE_HOME", "web_project"))
+    """Read per request so tests and `babelink web --project-dir` can point it elsewhere."""
+    return Path(os.environ.get("BABELINK_HOME", "web_project"))
 
 
 @app.middleware("http")
 async def guard(request: Request, call_next):
     host = urlsplit("//" + request.headers.get("host", "")).hostname
-    extra = {h.strip() for h in os.environ.get("LOREBRIDGE_HOSTS", "").split(",") if h.strip()}
+    extra = {h.strip() for h in os.environ.get("BABELINK_HOSTS", "").split(",") if h.strip()}
     if host not in LOCAL_HOSTS | extra:
         return JSONResponse({"detail": "host not allowed"}, status_code=403)
     if request.method not in ("GET", "HEAD", "OPTIONS") and request.url.path.startswith("/api"):
@@ -450,7 +450,7 @@ async def import_pages(pid: int, files: list[UploadFile] = File(...), db: Databa
     """Comic/manhua page images or a CBZ/ZIP of them. OCR runs as a job so the request returns at once."""
     project_or_404(db, pid)
     if importlib.util.find_spec("rapidocr_onnxruntime") is None:
-        raise HTTPException(501, "image support is not installed: pip install 'lorebridge[images]'")
+        raise HTTPException(501, "image support is not installed: pip install 'babelink[images]'")
     if not files or len(files) > 200:
         raise HTTPException(400, "send between 1 and 200 files")
     with _LOCK:

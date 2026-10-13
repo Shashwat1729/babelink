@@ -1,11 +1,11 @@
 from pathlib import Path
 
-from lorebridge.db import Database
-from lorebridge.importers import import_txt
-from lorebridge.pipeline import analyze_project, translate_project
-from lorebridge.providers.base import MockProvider
-from lorebridge.refinement import guardrail_ok, mark_stale_by_term, run_refinement
-from lorebridge.models import SegmentState
+from babelink.db import Database
+from babelink.importers import import_txt
+from babelink.pipeline import analyze_project, translate_project
+from babelink.providers.base import MockProvider
+from babelink.refinement import guardrail_ok, mark_stale_by_term, run_refinement
+from babelink.models import SegmentState
 
 
 def _setup(tmp_path: Path):
@@ -48,7 +48,7 @@ def test_mark_stale_by_term(tmp_path: Path):
 
 
 def test_refine_note_is_stored_apart_and_exported(tmp_path: Path):
-    from lorebridge.exporters import export_epub, export_txt
+    from babelink.exporters import export_epub, export_txt
 
     class Noting(MockProvider):
         def refine(self, source, draft, **kw):
@@ -72,7 +72,7 @@ def test_refine_note_is_stored_apart_and_exported(tmp_path: Path):
 
 
 def test_refinement_flags_changed_names(tmp_path: Path):
-    from lorebridge.refinement import dropped_names, run_refinement
+    from babelink.refinement import dropped_names, run_refinement
 
     assert dropped_names("Ask Lin Ruhai for help. He left.", "Ask Lin Ruihai for help. He left.") == ["Ruhai"]
     assert dropped_names("After dinner, Yuzhen left.", "Having eaten, Yuzhen left.") == []
@@ -96,7 +96,7 @@ def test_refinement_flags_changed_names(tmp_path: Path):
 
 
 def test_propagation_impact_previews_stale_scope(tmp_path: Path):
-    from lorebridge.refinement import mark_stale_by_term, propagation_impact
+    from babelink.refinement import mark_stale_by_term, propagation_impact
 
     db, pid = _setup(tmp_path)
     impact = propagation_impact(db, pid, "炼气期")
