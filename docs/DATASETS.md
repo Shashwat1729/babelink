@@ -68,7 +68,7 @@ shows what the model does versus what the harness adds.
 | Martial Peak ch.1 ZH (manwaye/manwaxu) | fetched via chapter-info + image APIs; images AES-CBC (key in reader JS) | decrypted locally, full zh→en loop run |
 | Comick.io API search | endpoint shape changed (404) | would need re-discovery; deprioritized after MangaDex worked |
 | Baozimh web search | 403 bot wall | app-endpoint pattern known but gated; needs session handling |
-| Nano Machine Korean story pages (manhwa18x-class sites) | JS-rendered readers: only covers in static HTML | needs Playwright fetch (available in dev extras) or manual raw drop; OCR + ko→en engine already proven |
+| Same-panel fan EN (Trash: ad-gate + SSL fail; zinmanga: Access Denied; MangaDex: no entry) | blocked on acquisition | 3-column raw/ours/human waits on a fetchable fan chapter |
 
 Protocol for your own raws: drop page images in a folder, import as a `ko`/`zh` project,
 translate, export CBZ; score OCR blocks against a manual transcript and translations

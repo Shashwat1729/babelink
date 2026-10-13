@@ -40,6 +40,10 @@ def check_segment(source: str, translated: str, source_lang: str = "zh", glossar
     cjk_source = bool(_CJK.search(source))
     if cjk_source and _CJK.search(_GLOSSED.sub("", translated)):
         found.append(("warning", "untranslated_source", "Translation still contains CJK characters."))
+    norm_in = re.sub(r"[\W_]+", "", source or "").casefold()  # Nano Machine: screams came back
+    norm_out = re.sub(r"[\W_]+", "", translated or "").casefold()  # unchanged ('ACK!!!' -> 'ACK！！！')
+    if norm_in and norm_in == norm_out and len(norm_in) <= 30 and re.search(r"[^\W\d_]", norm_in):
+        found.append(("warning", "untranslated_source", "Translation copies the source unchanged."))
     src_nums = _NUM.findall(source)
     if src_nums and not all(n in translated for n in src_nums):
         found.append(("warning", "number_mismatch", f"Numbers {src_nums} not all present in translation."))

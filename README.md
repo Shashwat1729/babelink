@@ -78,7 +78,7 @@ Translating a chapter is three clicks. Proofreading it is the actual job, so the
 | Japanese light novel (ja→en) | ParallelFiction bake-off | CAT-Translate-1.4B | beats Hy-MT2 head-to-head |
 | Japanese light novel (ja→zh) | OpenSakura, gold glossary | Hy-MT2-1.8B | 9/9 terms vs 1/9 bare |
 | Japanese classic (ja→en) | Rashōmon, 32 paras | CAT-Translate-1.4B | 32/32 complete, QA 5→1 |
-| Chinese manhua (zh→en) | Martial Peak ch.1 raws, photo above | OCR + Hy-MT2 | 11/11 blocks, 37s, QA 11/11 |
+| Chinese manhua (zh→en) | Martial Peak ch.1 raws, photo above | OCR + Hy-MT2 | 21/21 blocks, QA 21/21, 0 source words left |
 | Korean manhwa (en→zh) | Nano Machine ch.1, full strip above | OCR + Hy-MT2 | 21/21 blocks, 62s, QA 21/21 |
 | Korean manhwa (ko→en) | Nano Machine | OCR + Hy-MT2 | ko→en engine proven; KO story raws JS-walled |
 | Japanese manga (ja→en) | One Piece class | — | blocked on Japanese OCR (no usable open weights; same per-script slot as Korean, ready to fill) |
@@ -234,8 +234,20 @@ from its own reader JS):
 |---|---|
 | ![](docs/screenshots/mp-page-raw.png) | ![](docs/screenshots/mp-page-ours.png) |
 
-4 pages, 11/11 blocks OCR'd, 11/11 translated in 37s, QA 11 checked / 11 passed / 0 warnings.
-`我叫杨开，是凌霄阁的试炼弟子` → "My name is Yang Kai, and I am a trial disciple of Lingxiao Ge."
+4 pages, 11/11 blocks OCR'd, 11/11 translated in 37s, QA 11 checked / 11 passed / 0 warnings —
+and again on the dialogue pages (pp.6+11): 10/10 translated, QA 10/10, zero source words left anywhere:
+
+| Bubble (p.11) | Ours | QA |
+|---|---|---|
+| 这就是那个试炼弟子杨开啊 | This is the trial disciple Yang Kai. | — |
+| 到现在还是淬体三层 | Still at the third level of Body Tempering. | — |
+| 上次他被挑战已经过了五天了… | It has been five days since he was challenged last time. | — |
+| 又有挑战他的机会了！ | Now there's a chance to challenge him! | — |
+| 这么多人，有些过分了吧？ | So many people—isn't that a bit excessive? | — |
+
+A same-panel fan-English third column was pursued and blocked: MangaDex hosts no Martial Peak,
+Trash Scanlations gates behind ads/SSL, zinmanga bot-walls (fetch log in [docs/DATASETS.md](docs/DATASETS.md)) —
+so the pairs above stand as raw vs ours, with the QA table as the referee instead of a second human.
 
 **Nano Machine ch.1, English → Chinese** (full webtoon strip, Asura Scans English):
 
