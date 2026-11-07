@@ -44,11 +44,50 @@ The tree above is the target from spec §94. The repository today is a single pa
 `cli.py`, `web.py` + `static/`, `config.py`, `pipeline.py`, `context.py`, `terminology.py`, `story_bible.py`, `qa.py`, `refinement.py`, `review.py`,
 `importers/`, `exporters/`, `providers/`, `images.py` (comic pages, optional `[images]` extra) and the evaluation modules. See DEVELOPMENT.md.
 
+## Story Graph (2026-10-14 overhaul)
+
+`src/babelink/graph.py` (new) is the narrative knowledge-graph layer over the
+Story Bible. `story_bible.py` keeps its public API but normalizes onto the graph:
+entity sections stay lists of dicts, now with stable `type:name` IDs
+(`character:贾政`), typed edges in `relationships` (`member_of, allied_with,
+located_in, …`, plus `appears/active_in_chapter` and `co_occurs`), `first_seen`
+chapter numbers, and alias merging on upsert. `link_recommendations` proposes
+co-occurrence edges over shared chapters; nothing is auto-applied — a human
+or the review step approves edges. Unknown entity/edge fields are preserved
+through load/save.
+
+Consistency machinery on top of the graph (terminology.py, entities.py):
+list-free distinctiveness (burstiness + rendering over-spread demote diffuse
+agreements to vote-only), co-occurrence sense splitting (`canon["senses"]`
+keeps two distinct winners per term), and a first-mention anchor as a prior.
+
+Retrieval (context.py) is entity-aware: literal term presence + alias sharing
+rank past segments, bible summaries ride along, and the render budget is exact
+(every item measured including prefixes and separators).
+
+QA (qa.py, escalation.py, estimate.py) now covers term-variant leak (losing
+surfaces from elections), mechanical voice-register drift (IQR outlier, fail-open
+under 8 baseline segments), and antecedent checks (closed-class grammar only).
+Round-trip chrF is validated as a router (fixture AUC 0.988) and threaded with
+the losing surfaces through `translate_project` into both draft selection and
+post-hoc QA.
+
+Providers (fallback.py, providers/): `keep_alive` constructor kwarg, warm-up
+helpers, memoized providers (usage counters reset per reuse), join-batch
+`translate_batch` (additive, unused by the pipeline). `translate_project`
+warms the provider once before the segment loop (best-effort).
+
+Comic pages (images.py): `order_blocks` (RTL columns for vertical manga, rows
+otherwise), two-pass low-confidence re-OCR (2× upscale, keeps the higher
+score), and typeset overflow flags (`Block.needs_review`) instead of clipped
+ink outside the inscribed area.
+
 ## Key Concepts
 
 - **Project**: one book/series. Owns Story Bible, terminology, TM, style guide, segment states.
 - **Segment**: chapter → scene → paragraph-sized unit; state machine per spec §40.
 - **Story Bible**: canonical entities with language-independent IDs; versioned JSON files + SQLite mirror; contradictions flagged (ADR-004).
+- **Story Graph**: typed entities + typed edges over the Bible (`graph.py`); `first_seen`, chapter presence, co-occurrence suggestions with human review.
 - **Terminology**: canonical terms with policy (`fixed|preferred|flexible|contextual|...`), distinct from flexible prose vocabulary.
 - **Translation Memory**: semantic + exact recall; reference, never blind substitution.
 - **Context assembly**: ranked by importance/relevance/entity overlap/recency/similarity within a token budget (§80).
