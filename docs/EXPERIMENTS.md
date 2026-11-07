@@ -357,11 +357,14 @@ helper `huihui_ai/qwen3-abliterated:4b` (4k ctx — 8k OOMs, see REGRESSIONS.md)
 - **Track E (latency)**: `keep_alive` constructor kwarg, provider `warm_up()`
   helpers, batching in `ChainProvider.translate_batch` (unused by the pipeline
   so far — additive API only), per-`(kind, model, url)` memoized providers
-  (usage counters reset per reuse). Oversight catch in review: E broke temp
-  delegation (baked `_temp` at construction) and cut `num_ctx` unproven — both
-  reverted (see REGRESSIONS). Bench used qwen stand-ins because
-  `hymt2-1.8b`/`cat14b` are absent from this Ollama store — numbers are
-  indicative, not the real engines.
+  (usage counters reset per reuse), `translate_project` warms the provider once
+  before the segment loop (best-effort, never blocks). Oversight catch:
+  the first bench used qwen2.5 stand-ins (real engines `hymt2-1.8b`/`cat14b`
+  were not visible to the Ollama server); after the server was restarted with
+  `D:\ollama\models`, the REAL numbers are: cold first call 39s, warm avg
+  7.2s/segment, batch(4) 17.4s vs sequential 19.2s ≈ 10% faster. Reviewer
+  follow-up: unmeasured `num_ctx` cut and broken `SAMPLING` delegation in
+  providers were reverted (see REGRESSIONS).
 - **Track F (comics)**: `order_blocks` (RTL columns for vertical manga, rows
   otherwise), two-pass OCR on low-confidence blocks (≤2× upscale, keeps higher
   score), typeset overflow → `Block.needs_review` flag instead of clipping,

@@ -201,6 +201,11 @@ def translate_project(db: Database, project_id: int, provider, *, limit: Optiona
     run_id = db.add_model_run(ModelRun(None, project_id, "translation", provider.name, prompts.PROMPT_VERSION,
                                        _version(sorted(glossary.items())), "", "", json.dumps(params)))
     stats = {"segments": 0, "tm_exact": 0, "refusals": 0, "escalated": 0, "skipped": 0}
+    try:  # model load is ~39s cold (real-model bench); warm once, not per segment
+        from .fallback import warmup as _warmup
+        _warmup(provider, timeout=120)
+    except Exception:  # noqa: BLE001 — warmup is best-effort; never blocks the run
+        pass
     register_baseline: list[str] = [r["translated_text"] for r in db.segments_for_project(project_id, translated_only=True)][-30:]
     titled: set[int] = set()
 
