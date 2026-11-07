@@ -332,3 +332,40 @@ helper `huihui_ai/qwen3-abliterated:4b` (4k ctx — 8k OOMs, see REGRESSIONS.md)
   registration download; Baka-Tsuki (ja→en long-form fan) needs a scraper.
 - O5 fine-tuning: LoRA on (source, glossary, reference) triples from GuoFeng/OpenSakura
   so the ENGINE consumes glossary natively — only if E05 shows prompting can't.
+
+## E19 — Architecture overhaul (6 parallel tracks) + review
+
+- **Track A (story graph, new `graph.py`)**: typed entity nodes + typed edges
+  (`member_of, allied_with, located_in, …`), stable human-readable IDs, alias
+  merging, `first_seen` + `appears/active_in_chapter` edges, co-occurrence
+  `link_recommendations` for human review, Bible adapters that never drop unknown
+  fields. `story_bible.py` keeps its public API but normalizes onto the graph.
+- **Track B (consistency)**: list-free distinctiveness demotion (descriptive
+  agreements like Sister go vote-only, diffuses detected by burstiness + rendering
+  over-spread), co-occurrence sense splitting (`canon["senses"]`), first-mention
+  anchor as a tie-break prior. Sized with one-pass segment scans (book-scale).
+- **Track C (context)**: entity-aware retrieval — literal term presence + alias
+  sharing scores past segments (0/1 → 1/1 top-5 on the zero-token-overlap fixture,
+  43 ms on 1000 segments). `build_context` now adds up to `n_entity=3` long-range
+  hits; `render_context`'s budget is exact.
+- **Track D (QA)**: `term_variant_leak`, `voice_register_drift` (mechanical IQR
+  outlier, fail-open), `antecedent_check` (closed-class grammar only). Round-trip
+  chrF validated as a router: fixture AUC 0.988 → wired with threshold 30.0 +
+  `ROUNDTRIP_MIN_SOURCE_LEN=20`. Losers + a rolling register baseline are now
+  threaded through `translate_project` into `select_best`/`qa_segment` (the draft
+  path previously saw none of these).
+- **Track E (latency)**: `keep_alive` constructor kwarg, provider `warm_up()`
+  helpers, batching in `ChainProvider.translate_batch` (unused by the pipeline
+  so far — additive API only), per-`(kind, model, url)` memoized providers
+  (usage counters reset per reuse). Oversight catch in review: E broke temp
+  delegation (baked `_temp` at construction) and cut `num_ctx` unproven — both
+  reverted (see REGRESSIONS). Bench used qwen stand-ins because
+  `hymt2-1.8b`/`cat14b` are absent from this Ollama store — numbers are
+  indicative, not the real engines.
+- **Track F (comics)**: `order_blocks` (RTL columns for vertical manga, rows
+  otherwise), two-pass OCR on low-confidence blocks (≤2× upscale, keeps higher
+  score), typeset overflow → `Block.needs_review` flag instead of clipping,
+  never ink outside the inscribed mask.
+- Suite: 128 → 174 tests. Reviewer subagents died on free-usage caps mid-flight;
+  all 6 tracks were reviewed and fixed by the runner instead. Neuter checks
+  confirm each money test is load-bearing (fails when its mechanism is neutered).

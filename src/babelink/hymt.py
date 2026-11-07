@@ -64,7 +64,9 @@ def unwrap_output(text: str) -> str:
         text = text.replace(tok, "")
     return text.strip()
 
-# Released sampling settings for Hy-MT2 1.8B/7B.
+# Released sampling settings for Hy-MT2 1.8B/7B. The operational default now
+# reads this at call time (providers delegate), so scripts/ablate_temp.py
+# can still sweep temperature by mutating SAMPLING before a run.
 SAMPLING = {"temperature": 0.7, "top_p": 0.6, "top_k": 20, "repetition_penalty": 1.05}
 
 _STYLE_LINE = {

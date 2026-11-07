@@ -73,3 +73,59 @@ def entities_for_segment(glossary: dict[str, str], source: str, db=None, project
     for i, (f, _) in enumerate(present):
         ids[f] = eids.get(f, i)
     return [(f, ids[f]) for f, _ in present], {ids[f]: tr for f, tr in present}
+
+
+def cooccurrence_signature(source_text: str, term: str, all_forms: list[str]) -> frozenset:
+    """Other terminology forms co-occurring with `term` in one source segment."""
+    return frozenset(f for f in all_forms if f and f != term and f in source_text)
+
+
+def cluster_by_cooccurrence(segments, term: str, all_forms: list[str], min_cluster: int = 2) -> list[dict]:
+    """Group a term's segments by distinct entity contexts (co-occurrence).
+
+    Greedy first-fit: a segment joins the first cluster whose context union it
+    shares a term with; otherwise it starts a new cluster. Empty-signature
+    segments (no other term present) form their own cluster — they are still a
+    distinct context (the bare/isolated use). Returns clusters sorted by size
+    (descending), each as {context, segments, segment_ids}; clusters below
+    min_cluster are discarded (singletons are noise, not senses).
+    """
+    clusters: list[dict] = []
+    for seg in segments:
+        text = seg["source_text"] or "" if isinstance(seg, dict) or hasattr(seg, "__getitem__") else ""
+        # sqlite3.Row supports __getitem__ but not .get; normalize access.
+        try:
+            text = seg["source_text"] or ""
+        except Exception:
+            text = getattr(seg, "source_text", "") or ""
+        try:
+            seg_id = seg["id"]
+        except Exception:
+            seg_id = getattr(seg, "id", None)
+        sig = cooccurrence_signature(text, term, all_forms)
+        placed = False
+        for cl in clusters:
+            if sig and (sig & cl["context"]):
+                cl["context"] = cl["context"] | sig
+                cl["segments"].append(seg)
+                if seg_id is not None:
+                    cl["segment_ids"].append(seg_id)
+                placed = True
+                break
+            if not sig and not cl["context"]:
+                cl["segments"].append(seg)
+                if seg_id is not None:
+                    cl["segment_ids"].append(seg_id)
+                placed = True
+                break
+        if not placed:
+            clusters.append({
+                "context": set(sig),
+                "segments": [seg],
+                "segment_ids": [seg_id] if seg_id is not None else [],
+            })
+    kept = [c for c in clusters if len(c["segments"]) >= min_cluster]
+    kept.sort(key=lambda c: -len(c["segments"]))
+    for c in kept:
+        c["context"] = sorted(c["context"])  # json-friendly
+    return kept

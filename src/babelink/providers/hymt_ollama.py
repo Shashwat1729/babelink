@@ -30,15 +30,21 @@ class HymtOllamaProvider(OllamaProvider):
     prompt_features = frozenset({"glossary", "background", "tm_hints", "style"})  # trained with all four blocks
 
     def __init__(self, model: str = DEFAULT_MODEL, base_url: str = "http://localhost:11434",
-                 num_ctx: int = 8192, timeout: float = 900):
-        super().__init__(model=model, base_url=base_url, num_ctx=num_ctx, timeout=timeout)
+                 num_ctx: int = 8192, timeout: float = 900, keep_alive: str = "30m",
+                 temperature: float | None = None):
+        super().__init__(model=model, base_url=base_url, num_ctx=num_ctx, timeout=timeout, keep_alive=keep_alive)
+        self.temperature = temperature  # None = read the shared SAMPLING default at call time
         self.name = f"hymt:{model}"
+
+    def _temp(self) -> float:
+        if self.temperature is not None:
+            return self.temperature
+        from ..hymt import SAMPLING
+        return SAMPLING["temperature"]
 
     def translate(self, source: str, glossary: dict[str, str] | None = None, context: str = "",
                   max_tokens: int | None = None, *, style: str = "", source_lang: str = "zh",
                   target_lang: str = "en", tm_hints=None, on_delta: Optional[Delta] = None) -> str:
-        from ..hymt import SAMPLING
-
         mt = max_tokens or auto_max_tokens(source)
         # MT models take background, not chatty context headers: pass the story
         # context through as background info (official Structured-Data-2 block).
@@ -50,7 +56,7 @@ class HymtOllamaProvider(OllamaProvider):
                          "\n".join(f"{s} => {t}" for s, t in tm_hints)
         _system, user = mt_prompt(source, glossary=glossary, style=style,
                                   source_lang=source_lang, target_lang=target_lang, background=background)
-        out = prompts.clean_output(self.chat("", user, temperature=SAMPLING["temperature"], max_tokens=mt, on_delta=on_delta))
+        out = prompts.clean_output(self.chat("", user, temperature=self._temp(), max_tokens=mt, on_delta=on_delta))
         if prompts.looks_like_refusal(out, source):
             self.usage["refusals"] += 1
             _s, neutral = prompts.neutral_prompt(source, source_lang, target_lang)

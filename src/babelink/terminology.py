@@ -60,6 +60,277 @@ _ROMAJI_SYL = re.compile(rf"(?:(?:{_ROMAJI_INIT})?(?:{_ROMAJI_FIN}))+")
 _NAME_TYPES = ("character", "location", "organization")
 
 
+# -- distinctiveness / senses / first-mention anchor (list-free) -------------------
+# No word lists: all three mechanisms below use only corpus statistics and
+# model votes. Distinctiveness uses the same burstiness weight as mining
+# (count × log(N/df)) computed from the DB's segments; senses use entity
+# co-occurrence clustering (entities.py); first-mention anchor records the
+# earliest chapter/segment in reading order at suggest time.
+
+DISTINCTIVENESS_MIN_SEGMENTS = 10  # small corpora: df is meaningless, fail open
+DISTINCTIVENESS_REL_THRESHOLD = 0.3  # burst < 0.3 × sibling-median burst ⇒ diffuse
+DISTINCTIVENESS_DF_RATIO = 0.6  # only diffuse terms (df/N ≥ 0.6) can demote
+RENDERING_OVERSPREAD = 2.0  # English rendering present in >2× the term's segments
+RENDERING_WITHOUT_SHARE = 0.25  # ... and missing-term share of corpus ≥ 0.25
+SENSE_MIN_CLUSTER = 2
+SENSE_MIN_SHARE = 0.8
+
+
+def _all_forms(db, project_id: int) -> list[str]:
+    forms: list[str] = []
+    for t in db.terminology_for_project(project_id):
+        for f in json.loads(t["source_forms"]):
+            if f and f not in forms:
+                forms.append(f)
+    return forms
+
+
+def _first_mention(db, project_id: int, forms: str | list[str]) -> dict | None:
+    """Earliest (chapter_order, segment_order) containing any of the forms."""
+    return _first_mention_from(db, project_id, forms, _segment_texts(db, project_id))
+
+
+def _first_mention_from(db, project_id: int, forms: str | list[str], segs: list) -> dict | None:
+    if isinstance(forms, str):
+        forms = [forms]
+    forms = [f for f in forms if f]
+    if not forms or not segs:
+        return None
+    # segments_for_project returns sqlite3.Row in reading order — but order once
+    # for safety (chapter_order rides along when the row factory supplies it).
+    def _ord(s):
+        try:
+            co = s["chapter_order"] if "chapter_order" in s.keys() else 0
+        except Exception:
+            co = 0
+        return (co or 0, s["order_index"])
+    for s in sorted(segs, key=_ord):
+        text = s["source_text"] or ""
+        if any(f in text for f in forms):
+            ch = db.conn.execute("SELECT order_index FROM chapters WHERE id=?", (s["chapter_id"],)).fetchone()
+            return {"segment_id": s["id"], "chapter_id": s["chapter_id"],
+                    "chapter_order": ch["order_index"] if ch else 0, "segment_order": s["order_index"]}
+    return None
+
+
+def _ensure_first_mention(db, project_id: int, row, target: str = "en", segs=None) -> dict | None:
+    """Record first_mention into the row's canonical_translation (first wins)."""
+    canon = json.loads(row["canonical_translation"] or "{}")
+    if canon.get("first_mention"):
+        return canon["first_mention"]
+    forms = json.loads(row["source_forms"])
+    fm = _first_mention(db, project_id, forms) if segs is None else _first_mention_from(db, project_id, forms, segs)
+    if fm is None:
+        return None
+    canon["first_mention"] = fm
+    db.update_terminology(row["id"], canonical_translation=canon)
+    return fm
+
+
+def _record_first_mentions(db, project_id: int, target: str = "en") -> None:
+    """First-mention anchor pass: record the earliest chapter/segment of every
+    term that matters (enforced or vote-candidate). Runs at suggest time, so
+    reconcile can use it as a tie-break prior. First recorded value wins, so
+    later runs never silently move the anchor."""
+    segs = _segment_texts(db, project_id)  # one pass for all terms (book-scale)
+    for row in db.terminology_for_project(project_id):
+        canon = json.loads(row["canonical_translation"] or "{}")
+        if canon.get("first_mention"):
+            continue
+        if row["status"] == "ignored" and not canon.get("candidates"):
+            continue  # pure junk with no votes: no anchor needed
+        _ensure_first_mention(db, project_id, row, target, segs=segs)
+
+
+def _segment_texts(db, project_id: int) -> list:
+    return db.segments_for_project(project_id)
+
+
+def term_distinctiveness(db, project_id: int, term: str, texts: list[str] | None = None) -> dict:
+    """Burstiness distinctiveness of one term against the project corpus.
+
+    Returns {df, count, burst, df_ratio, n, distinctiveness}. df = segments
+    containing the term, count = total substring mentions, burst =
+    count×log(N/df) (same weight as mine_terms), df_ratio = df/N. Small
+    corpora (N<10) are exempt — caller decides demotion. Pass `texts` to
+    reuse a preloaded corpus (apply_distinctiveness_filter does this once).
+    """
+    import math as _math
+
+    segs = texts if texts is not None else [s["source_text"] or "" for s in _segment_texts(db, project_id)]
+    n = len(segs)
+    if n == 0:
+        return {"df": 0, "count": 0, "burst": 0.0, "df_ratio": 1.0, "n": 0, "distinctiveness": 0.0}
+    df = cnt = 0
+    for text in segs:
+        c = text.count(term)
+        if c > 0:
+            df += 1
+            cnt += c
+    burst = cnt * _math.log(n / max(1, df)) if df and n > df else 0.0
+    return {"df": df, "count": cnt, "burst": round(burst, 3), "df_ratio": round(df / n, 3),
+            "n": n, "distinctiveness": round(burst / max(1, n), 3)}
+
+
+def _enforced_rows(db, project_id: int, target: str) -> list:
+    """Rows whose rendering currently reaches prompts (suggested + glossary-grade)."""
+    out = []
+    project = db.get_project(project_id)
+    for t in db.terminology_for_project(project_id):
+        if t["status"] in ("ignored", "confirmed"):
+            continue
+        tr = json.loads(t["canonical_translation"]).get(target)
+        if not tr:
+            continue
+        forms = json.loads(t["source_forms"])
+        if not forms:
+            continue
+        if _is_bad_translation(forms[0], tr, target, t["concept"] or "", project["source_lang"]):
+            continue
+        out.append(t)
+    return out
+
+
+def apply_distinctiveness_filter(db, project_id: int, target: str = "en") -> dict:
+    """Demote descriptive agreements below threshold to vote-only (no lists).
+
+    A suggested term is demoted when it is DIFFUSE relative to its siblings:
+    its burstiness is below DISTINCTIVENESS_REL_THRESHOLD × sibling-median
+    burst while its df/N is at least DISTINCTIVENESS_DF_RATIO, OR its English
+    rendering is over-spread in shipped translations (present in >2× the
+    term's segments, ≥25% without the term — the "Sister"/"Madam" shape).
+    Demoted terms keep their rendering as a vote candidate (candidates +
+    losers) with status ignored, so the book election can still elect them.
+    Confirmed terms and small corpora (N<10) are exempt. Returns
+    {demoted, kept, threshold, scores}.
+    """
+    import math as _math
+    import statistics as _stats
+
+    enforced = _enforced_rows(db, project_id, target)
+    segs = _segment_texts(db, project_id)
+    n = len(segs)
+    scores: dict[str, dict] = {}
+    if n < DISTINCTIVENESS_MIN_SEGMENTS or len(enforced) < 2:
+        return {"demoted": 0, "kept": len(enforced), "threshold": 0.0, "scores": scores}
+    # source-side burstiness per enforced term (primary form stands for the term)
+    texts = [s["source_text"] or "" for s in segs]
+    for t in enforced:
+        tr = json.loads(t["canonical_translation"]).get(target, "")
+        form = json.loads(t["source_forms"])[0]
+        d = term_distinctiveness(db, project_id, form, texts=texts)
+        d["rendering"] = tr
+        scores[form] = d
+    bursts = [scores[json.loads(t["source_forms"])[0]]["burst"] for t in enforced]
+    median_burst = _stats.median(bursts) if bursts else 0.0
+    threshold = DISTINCTIVENESS_REL_THRESHOLD * median_burst
+
+    # English-side rendering spread (only once translations exist)
+    trans_segs = db.segments_for_project(project_id, translated_only=True)
+    nt = len(trans_segs)
+    rendering_df: dict[str, int] = {}
+    if nt >= DISTINCTIVENESS_MIN_SEGMENTS:
+        for t in enforced:
+            tr = json.loads(t["canonical_translation"]).get(target, "") or ""
+            if not tr:
+                continue
+            low = tr.lower()
+            rendering_df[tr] = sum(1 for s in trans_segs if low in (s["translated_text"] or "").lower())
+
+    demoted = 0
+    for t in enforced:
+        form = json.loads(t["source_forms"])[0]
+        info = scores.get(form, {})
+        canon = json.loads(t["canonical_translation"])
+        tr = canon.get(target, "")
+        diffuse_low = (info.get("burst", 0.0) < threshold
+                       and info.get("df_ratio", 0.0) >= DISTINCTIVENESS_DF_RATIO)
+        over_spread = False
+        if nt >= DISTINCTIVENESS_MIN_SEGMENTS and tr:
+            rdf = rendering_df.get(tr, 0)
+            df_t = info.get("df", 0)
+            if rdf > max(1, df_t) * RENDERING_OVERSPREAD:
+                without = sum(1 for s in trans_segs
+                              if tr.lower() in (s["translated_text"] or "").lower()
+                              and form not in (s["source_text"] or ""))
+                if nt and without / nt >= RENDERING_WITHOUT_SHARE:
+                    over_spread = True
+                    info["rendering_df"] = rdf
+                    info["without_share"] = round(without / nt, 3)
+        info["threshold"] = round(threshold, 3)
+        info["median_burst"] = round(median_burst, 3)
+        canon["distinctiveness"] = info
+        if diffuse_low or over_spread:
+            cands = sorted({*canon.get("candidates", []), *([tr] if tr else [])})
+            canon["candidates"] = cands
+            canon["losers"] = sorted(set(canon.get("losers", [])) | set(cands))
+            canon.pop(target, None)
+            db.update_terminology(t["id"], canonical_translation=canon, status="ignored")
+            demoted += 1
+        else:
+            db.update_terminology(t["id"], canonical_translation=canon)
+    return {"demoted": demoted, "kept": len(enforced) - demoted, "threshold": round(threshold, 3),
+            "scores": scores}
+
+
+def _sense_clusters(db, project_id: int, term: str, min_cluster: int = SENSE_MIN_CLUSTER) -> list[dict]:
+    """Co-occurrence clusters for a term's translated segments (entities.py)."""
+    from .entities import cluster_by_cooccurrence
+
+    all_forms = _all_forms(db, project_id)
+    segs = [s for s in db.segments_for_project(project_id, translated_only=True)
+            if term in (s["source_text"] or "")]
+    if not segs:
+        return []
+    return cluster_by_cooccurrence(segs, term, all_forms, min_cluster=min_cluster)
+
+
+def detect_senses(db, project_id: int, term: str, min_cluster: int = SENSE_MIN_CLUSTER) -> list[dict]:
+    """Public sense detector: distinct entity-context clusters of a term.
+
+    Returns [{context, segment_ids, n}] for each cluster (empty when the term
+    lives in a single context). Used by reconcile_glossary to elect a winner
+    per sense instead of one merged winner; also directly testable.
+    """
+    raw = _sense_clusters(db, project_id, term, min_cluster=min_cluster)
+    return [{"context": c["context"], "segment_ids": c["segment_ids"], "n": len(c["segments"])}
+            for c in raw]
+
+
+def _elect_per_cluster(db, project_id: int, term: str, segs, bucket, norm,
+                       min_cluster: int = SENSE_MIN_CLUSTER, min_share: float = SENSE_MIN_SHARE) -> list[dict]:
+    """One winner per sense-cluster, mined from that cluster's own outputs.
+
+    Only called from reconcile_glossary. Returns accepted senses sorted by
+    size ({winner, context, segments, freq, share}) — empty unless at least
+    two clusters elect distinct winners, so single-context terms keep the
+    classic global election.
+    """
+    clusters = _sense_clusters(db, project_id, term, min_cluster=min_cluster)
+    if len(clusters) < 2:
+        return []
+    accepted: list[dict] = []
+    for cl in clusters:
+        freq: dict[str, int] = {}
+        for s in cl["segments"]:
+            for phrase in set(_latin_phrases(s["translated_text"] or "")):
+                if norm(phrase) in bucket:
+                    freq[phrase] = freq.get(phrase, 0) + 1
+        if not freq:
+            continue
+        best = max(sorted(freq), key=lambda p: (freq[p], " " in p, len(p)))
+        n = freq[best]
+        if n >= min_cluster and n / len(cl["segments"]) >= min_share:
+            accepted.append({"winner": best, "context": cl["context"],
+                             "segments": cl["segment_ids"], "freq": n,
+                             "share": round(n / len(cl["segments"]), 3)})
+    norms = {re.sub(r"[^a-z]", "", s["winner"].lower()) for s in accepted}
+    if len(accepted) < 2 or len(norms) < 2:
+        return []
+    accepted.sort(key=lambda s: -len(s["segments"]))
+    return accepted
+
+
 def _is_romaji_shaped(text: str) -> bool:
     tokens = [t for t in re.split(r"[^A-Za-züÜ]+", _strip_accents(text)) if t]
     return bool(tokens) and all(
@@ -454,7 +725,12 @@ def reconcile_glossary(db, project_id: int, target: str = "en", min_share: float
     necessarily a recorded candidate. Recorded renderings can be distorted
     twins ('Ladywang') or guesses the book never uses ('Wang Furen'); the
     shipped text is the oracle, and it may know the natural form ('Lady Wang')
-    that no component proposed. No model calls. Returns {term: winner}."""
+    that no component proposed. A first-mention anchor (recorded at suggest
+    time, computed here when missing) breaks ties toward the surface used in
+    the term's first chapter — a prior, not an absolute override. When a term
+    lives in two distinct entity contexts, each sense elects its own winner
+    and both are kept in canonical['senses'] instead of one merged winner.
+    No model calls. Returns {term: winner}."""
     won = {}
     terms = db.terminology_for_project(project_id)
     for t in terms:
@@ -472,14 +748,60 @@ def reconcile_glossary(db, project_id: int, target: str = "en", min_share: float
             continue
         norm = lambda s: re.sub(r"[^a-z]", "", s.lower())
         bucket = {norm(c) for c in cands if norm(c)}
+        # first-mention anchor: recorded at suggest time; compute here when a
+        # row bypassed suggest (direct add). Never overrides the stored value.
+        if not canon.get("first_mention"):
+            fm = _first_mention(db, project_id, forms)
+            if fm is not None:
+                canon["first_mention"] = fm
+        first_chapter_id = (canon.get("first_mention") or {}).get("chapter_id")
+        # --- senses: two entity contexts elect two winners, not one merge ---
+        senses = _elect_per_cluster(db, project_id, term, segs, bucket, norm,
+                                    min_cluster=SENSE_MIN_CLUSTER, min_share=min_share)
+        if senses:
+            best = senses[0]["winner"]
+            canon[target] = best
+            canon["senses"] = senses
+            winner_norms = {norm(s["winner"]) for s in senses}
+            canon["losers"] = sorted(set(canon.get("losers", []))
+                                     | {c for c in cands if norm(c) not in winner_norms}
+                                     | {c for c in cands if c != best and norm(c) not in winner_norms})
+            # keep every candidate visible either as a sense winner or a loser
+            canon["candidates"] = sorted(set(cands) | {s["winner"] for s in senses})
+            db.update_terminology(t["id"], canonical_translation=canon, concept=t["concept"] or "name",
+                                   status="suggested")
+            won[term] = best
+            continue
         freq: dict[str, int] = {}
         for s in segs:
             for phrase in set(_latin_phrases(s["translated_text"] or "")):
                 if norm(phrase) in bucket:
                     freq[phrase] = freq.get(phrase, 0) + 1
         if freq:
-            # Most frequent verbatim surface; ties prefer spaced natural forms.
-            best = max(sorted(freq), key=lambda p: (freq[p], " " in p, len(p)))
+            # Most frequent verbatim surface; ties prefer the surface used in
+            # the first chapter (anchor prior), then spaced natural forms.
+            max_freq = max(freq.values())
+            tied = sorted([p for p, c in freq.items() if c == max_freq])
+            best = tied[0]
+            if len(tied) > 1:
+                first_segs = [s for s in segs if first_chapter_id is not None and s["chapter_id"] == first_chapter_id]
+                if first_segs:
+                    first_freq: dict[str, int] = {}
+                    for s in first_segs:
+                        for phrase in set(_latin_phrases(s["translated_text"] or "")):
+                            if norm(phrase) in bucket:
+                                first_freq[phrase] = first_freq.get(phrase, 0) + 1
+                    if first_freq:
+                        max_first = max(first_freq.values())
+                        first_tied = sorted([p for p in tied if first_freq.get(p, 0) == max_first])
+                        if len(first_tied) == 1:
+                            best = first_tied[0]
+                        else:
+                            best = max(first_tied, key=lambda p: (" " in p, len(p)))
+                    else:
+                        best = max(tied, key=lambda p: (" " in p, len(p)))
+                else:
+                    best = max(tied, key=lambda p: (" " in p, len(p)))
             n = freq[best]
             if n >= min_occ and n / len(segs) >= min_share:
                 canon[target] = best
@@ -812,6 +1134,8 @@ def suggest_term_translations(db, project_id: int, provider, *, batch: int = 12,
     if translator is not None:
         _seed_probe_candidates(db, project_id, translator, target, project["source_lang"], verbose)
     _merge_aliases(db, project_id, target)
+    _record_first_mentions(db, project_id, target)
+    apply_distinctiveness_filter(db, project_id, target)
     return done
 
 

@@ -1092,3 +1092,107 @@ def test_retry_prefers_bursty_names_over_diffuse_words(tmp_path):
     # only 1 slot: the bursty name must get it (its solo call happens), not the diffuse word
     assert Helper.seen and len(Helper.seen) == 2  # one batch call + one solo
     assert Helper.seen[-1] == ["王夫人"]
+
+
+# ---- distinctiveness / senses / first-mention anchor (E17 follow-up) ------------------
+def test_low_distinctiveness_agreement_demoted_to_vote_only(tmp_path):
+    """List-free distinctiveness: a diffuse term whose agreed rendering (Sister)
+    spans the corpus is vote-only even though both models agree; a bursty name
+    (Dai Yu) with the same agreement still enforces. Burst = count×log(N/df);
+    demotion needs df/N≥0.6 and burst <0.3×sibling-median; N≥10 required."""
+    import json
+
+    from babelink.terminology import (apply_distinctiveness_filter, build_glossary, suggest_term_translations,
+                                        term_distinctiveness, upsert_candidates)
+
+    # 12 segments: 姐姐 in all 12 (diffuse), 黛玉 3× in 2 of them (bursty).
+    paras = ["黛玉黛玉黛玉姐姐來了。", "黛玉黛玉黛玉姐姐去了。"] + ["姐姐又來了。"] * 10
+    db, pid, _ = project(tmp_path, "\n\n".join(paras))
+
+    class Helper(MockProvider):
+        def suggest_terms(self, items, source_lang="zh", target_lang="en"):
+            ren = {"姐姐": "Sister", "黛玉": "Dai Yu"}
+            return [{"term": t, "type": "character", "translation": ren[t], "enforce": True}
+                    for t, _ in items if t in ren]
+
+    class MT(MockProvider):
+        def translate(self, source, **kw):
+            return {"姐姐": "Sister", "黛玉": "Dai Yu"}[source]
+
+    assert term_distinctiveness(db, pid, "姐姐")["df_ratio"] == 1.0
+    upsert_candidates(db, pid, [("姐姐", 12), ("黛玉", 6)])
+    assert suggest_term_translations(db, pid, Helper(), translator=MT()) == 2
+    # diffuse Sister demoted to vote-only; bursty Dai Yu enforced
+    assert build_glossary(db, pid) == {"黛玉": "Dai Yu"}
+    stored = {json.loads(t["source_forms"])[0]: t for t in db.terminology_for_project(pid)}
+    assert stored["姐姐"]["status"] == "ignored"
+    assert "Sister" in json.loads(stored["姐姐"]["canonical_translation"]).get("candidates", [])
+    assert json.loads(stored["姐姐"]["canonical_translation"])["distinctiveness"]["df_ratio"] == 1.0
+    # first-mention anchor recorded at suggest time (earliest chapter/segment)
+    fm = json.loads(stored["黛玉"]["canonical_translation"]).get("first_mention")
+    assert fm is not None and fm["chapter_id"] == db.segments_for_project(pid)[0]["chapter_id"]
+    # idempotent: a second run demotes nothing new
+    assert apply_distinctiveness_filter(db, pid)["demoted"] == 0
+
+
+def test_two_sense_term_keeps_both_winners(tmp_path):
+    """青云 lives in two entity contexts (with 林凡 as a place, with 宗主 as
+    a title). Global election would merge (3/6 each, below 80% share);
+    senses elect per cluster so both surfaces survive in canonical['senses']."""
+    import json
+
+    from babelink.db import Database
+    from babelink.importers.base import store_chapters
+    from babelink.models import TerminologyEntry
+    from babelink.segment import ParsedChapter, to_html
+    from babelink.terminology import build_glossary, detect_senses, reconcile_glossary
+
+    db = Database(tmp_path / "d.db")
+    pid = db.create_project("t", source_lang="zh", target_lang="en")
+    doc = db.add_document(pid, "d", "eval", "d")
+    paras = ["林凡走進青云。", "林凡看見青云。", "林凡離開青云。", "宗主來到青云。", "宗主守著青云。", "宗主望向青云。"]
+    store_chapters(db, pid, doc, [ParsedChapter("c", to_html(paras), paras)])
+    outs = ["Lin Fan entered Qingyun Sect.", "Lin Fan saw Qingyun Sect.", "Lin Fan left Qingyun Sect.",
+            "The Lord guards Lord Qingyun.", "The Lord guards Lord Qingyun.", "The Lord guards Lord Qingyun."]
+    for s, out in zip(db.segments_for_project(pid), outs):
+        db.update_segment(s["id"], translated=out)
+    db.add_terminology(TerminologyEntry(None, pid, ["林凡"], {"en": "Lin Fan"}, "character", "preferred", "confirmed", 3))
+    db.add_terminology(TerminologyEntry(None, pid, ["宗主"], {"en": "The Lord"}, "title", "preferred", "confirmed", 3))
+    db.add_terminology(TerminologyEntry(None, pid, ["青云"], {"candidates": ["Qingyun Sect", "Lord Qingyun"]},
+                                       "location", "preferred", "ignored", 6))
+    clusters = detect_senses(db, pid, "青云")
+    assert len(clusters) == 2 and {tuple(c["context"]) for c in clusters} == {("林凡",), ("宗主",)}
+    won = reconcile_glossary(db, pid)
+    assert set(won) == {"青云"}  # primary winner still returned for callers
+    canon = json.loads([t for t in db.terminology_for_project(pid) if json.loads(t["source_forms"]) == ["青云"]][0]["canonical_translation"])
+    winners = {s["winner"] for s in canon["senses"]}
+    assert winners == {"Qingyun Sect", "Lord Qingyun"}  # neither sense merged away
+    assert build_glossary(db, pid)["青云"] in winners
+
+
+def test_first_chapter_winner_survives_later_tie(tmp_path):
+    """黛玉 ties 2–2 (Daiyu in ch1, 'Dai Yu' in ch2). The first-mention anchor
+    breaks the tie toward the first chapter's surface — a prior, not an
+    absolute: the classic spaced-form preference would have picked 'Dai Yu'."""
+    import json
+
+    from babelink.db import Database
+    from babelink.importers.base import store_chapters
+    from babelink.models import TerminologyEntry
+    from babelink.segment import ParsedChapter, to_html
+    from babelink.terminology import reconcile_glossary
+
+    db = Database(tmp_path / "d.db")
+    pid = db.create_project("t", source_lang="zh", target_lang="en")
+    doc = db.add_document(pid, "d", "eval", "d")
+    c1 = ["黛玉來了。", "黛玉去了。"]
+    c2 = ["黛玉又來。", "黛玉再去。"]
+    cids = store_chapters(db, pid, doc, [ParsedChapter("c1", to_html(c1), c1), ParsedChapter("c2", to_html(c2), c2)])
+    outs = ["Daiyu came.", "Daiyu left.", "Dai Yu came.", "Dai Yu left."]
+    for s, out in zip(db.segments_for_project(pid), outs):
+        db.update_segment(s["id"], translated=out)
+    db.add_terminology(TerminologyEntry(None, pid, ["黛玉"], {"candidates": ["Dai Yu", "Daiyu"]},
+                                       "character", "preferred", "ignored", 4))
+    assert reconcile_glossary(db, pid, min_share=0.5, min_occ=2) == {"黛玉": "Daiyu"}
+    canon = json.loads(db.terminology_for_project(pid)[0]["canonical_translation"])
+    assert canon["first_mention"]["chapter_id"] == cids[0]

@@ -37,6 +37,7 @@ class Block:
     polys: list[list[list[int]]]          # one quad per OCR line
     text: str
     score: float = 1.0
+    needs_review: bool = False            # typeset could not fit the text inside the bubble without overflowing
 
 
 def _deps():
@@ -118,10 +119,94 @@ def _rect(quad) -> tuple[int, int, int, int]:
     return min(xs), min(ys), max(xs), max(ys)
 
 
-def group_blocks(lines, *, joiner: str | None = None) -> list[Block]:
+def _median(values) -> float:
+    s = sorted(values)
+    if not s:
+        return 0.0
+    m = len(s) // 2
+    return float(s[m]) if len(s) % 2 else (s[m - 1] + s[m]) / 2
+
+
+def _layout_mode(blocks: list[Block], *, mode: str = "auto") -> str:
+    """`rtl_columns` for vertical manga, `horizontal` otherwise. Pure geometry:
+    a page is vertical when at least half its blocks are tall (h > 1.3 * w).
+    No new deps, no OCR content involved."""
+    if mode in ("rtl_columns", "horizontal"):
+        return mode
+    if not blocks:
+        return "horizontal"
+    if len(blocks) < 2:
+        return "horizontal"
+    tall = sum(1 for b in blocks if (b.box[3] - b.box[1]) > 1.3 * max(b.box[2] - b.box[0], 1))
+    return "rtl_columns" if tall * 2 >= len(blocks) else "horizontal"
+
+
+def order_blocks(blocks: list[Block], *, mode: str = "auto") -> list[Block]:
+    """Layout-aware reading order from bubble geometry alone.
+
+    - `horizontal` (default / non-vertical): cluster blocks into rows by their
+      y-centres (tolerance ~0.55x median height), rows top-to-bottom,
+      left-to-right within a row.
+    - `rtl_columns` (vertical manga): cluster into columns by x-centres
+      (tolerance ~0.55x median width), columns right-to-left, top-to-bottom
+      within a column.
+    `mode="auto"` picks between them via :func:`_layout_mode`.
+    Returns a new ordered list; the input is not mutated.
+    """
+    if len(blocks) <= 1:
+        return list(blocks)
+    m = _layout_mode(blocks, mode=mode)
+    if m == "rtl_columns":
+        med_w = max(_median([b.box[2] - b.box[0] for b in blocks]), 1.0)
+        tol = max(med_w * 0.55, 8.0)
+        by_cx = sorted(blocks, key=lambda b: -((b.box[0] + b.box[2]) / 2))
+        columns: list[list[Block]] = []
+        column_cx: list[float] = []
+        for b in by_cx:
+            cx = (b.box[0] + b.box[2]) / 2
+            for k, ccx in enumerate(column_cx):
+                if abs(cx - ccx) <= tol:
+                    columns[k].append(b)
+                    column_cx[k] = (ccx * len(columns[k]) + cx) / (len(columns[k]) + 1)
+                    break
+            else:
+                columns.append([b])
+                column_cx.append(cx)
+        ordered_cols = sorted(zip(column_cx, columns), key=lambda t: -t[0])
+        out: list[Block] = []
+        for _, col in ordered_cols:
+            col.sort(key=lambda b: (b.box[1], b.box[0]))
+            out.extend(col)
+        return out
+    med_h = max(_median([b.box[3] - b.box[1] for b in blocks]), 1.0)
+    tol = max(med_h * 0.55, 8.0)
+    by_cy = sorted(blocks, key=lambda b: (b.box[1] + b.box[3]) / 2)
+    rows: list[list[Block]] = []
+    row_cy: list[float] = []
+    for b in by_cy:
+        cy = (b.box[1] + b.box[3]) / 2
+        for k, ccy in enumerate(row_cy):
+            if abs(cy - ccy) <= tol:
+                rows[k].append(b)
+                row_cy[k] = (ccy * len(rows[k]) + cy) / (len(rows[k]) + 1)
+                break
+        else:
+            rows.append([b])
+            row_cy.append(cy)
+    ordered_rows = sorted(zip(row_cy, rows), key=lambda t: t[0])
+    out = []
+    for _, row in ordered_rows:
+        row.sort(key=lambda b: (b.box[0], b.box[1]))
+        out.extend(row)
+    return out
+
+
+def group_blocks(lines, *, joiner: str | None = None, order: str = "auto") -> list[Block]:
     """Merge OCR lines that belong to one bubble: stacked lines of similar height that overlap horizontally, or
-    neighbours on one row. Reading order: top to bottom, then left to right. # ponytail: right-to-left manga order is
-    not handled; add a `rtl` flag to the sort when needed."""
+    neighbours on one row. Reading order is layout-aware via :func:`order_blocks` (bubble geometry only):
+    columns right-to-left for vertical manga, top-to-bottom rows otherwise (`order="auto"`).
+    Within a vertical bubble the lines are columns too, read right-to-left, top-to-bottom.
+    """
     n = len(lines)
     rects = [_rect(q) for q, _, _ in lines]
     parent = list(range(n))
@@ -153,14 +238,18 @@ def group_blocks(lines, *, joiner: str | None = None) -> list[Block]:
         groups.setdefault(find(i), []).append(i)
     blocks = []
     for idx in groups.values():
-        idx.sort(key=lambda i: (rects[i][1], rects[i][0]))
+        # vertical bubble: most lines tall -> columns right-to-left, top-to-bottom
+        tall = sum(1 for i in idx if (rects[i][3] - rects[i][1]) > 1.6 * max(rects[i][2] - rects[i][0], 1))
+        if len(idx) > 1 and tall * 2 >= len(idx):
+            idx.sort(key=lambda i: (-(rects[i][0] + rects[i][2]) / 2, rects[i][1]))
+        else:
+            idx.sort(key=lambda i: (rects[i][1], rects[i][0]))
         texts = [lines[i][1] for i in idx]
         sep = joiner if joiner is not None else ("" if sum(bool(_CJK.search(t)) for t in texts) > len(texts) / 2 else " ")
         xs = [rects[i] for i in idx]
         blocks.append(Block((min(r[0] for r in xs), min(r[1] for r in xs), max(r[2] for r in xs), max(r[3] for r in xs)),
                             [lines[i][0] for i in idx], sep.join(texts), min(lines[i][2] for i in idx)))
-    blocks.sort(key=lambda b: (b.box[1], b.box[0]))
-    return blocks
+    return order_blocks(blocks, mode=order)
 
 
 def read_image(data: bytes | str | Path):
@@ -172,8 +261,64 @@ def read_image(data: bytes | str | Path):
     return img
 
 
-def detect_blocks(img, min_score: float = 0.5, lang: str = "") -> list[Block]:
-    return group_blocks([ln for ln in ocr_lines(img, lang) if ln[2] >= min_score])
+def _reocr_block_upscaled(img, block: Block, lang: str = "") -> Block | None:
+    """Re-OCR one block cropped from `img`, upscaled 2x, coordinates mapped back
+    to full-page coords. Returns the grouped block or None if nothing is found.
+    Uses the module-level :func:`ocr_lines` so tests can fake it."""
+    cv2, np, *_ = _deps()
+    x0, y0, x1, y1 = block.box
+    pad = 6
+    h, w = img.shape[:2]
+    cx0, cy0 = max(0, x0 - pad), max(0, y0 - pad)
+    cx1, cy1 = min(w, x1 + pad), min(h, y1 + pad)
+    if cx1 - cx0 < 8 or cy1 - cy0 < 8:
+        return None
+    crop = img[cy0:cy1, cx0:cx1]
+    up = cv2.resize(crop, (crop.shape[1] * 2, crop.shape[0] * 2), interpolation=cv2.INTER_CUBIC)
+    lines = ocr_lines(up, lang)
+    if not lines:
+        return None
+    remapped = [([[int(p[0] // 2 + cx0), int(p[1] // 2 + cy0)] for p in quad], text, score)
+                for quad, text, score in lines]
+    grouped = group_blocks(remapped)
+    if not grouped:
+        return None
+    return max(grouped, key=lambda b: (b.score, len(b.text)))
+
+
+def reocr_low_confidence_blocks(img, blocks: list[Block], *, lang: str = "", threshold: float = 0.75) -> list[Block]:
+    """Second pass: re-OCR every block whose score (min line confidence) is below
+    `threshold` on a 2x-upscaled crop. Statistical, dictionary-free replacement:
+    the upscaled result replaces the original only when its score is strictly
+    higher. Order is re-applied afterwards so geometry stays consistent.
+    No word lists, no spelling heuristics — spacing slips like 'MYLEG' vs
+    'MY LEG' are only fixed this way when the upscaled recognizer actually
+    scores higher on 'MY LEG'."""
+    out = []
+    for b in blocks:
+        if b.score >= threshold:
+            out.append(b)
+            continue
+        try:
+            alt = _reocr_block_upscaled(img, b, lang)
+        except Exception:
+            alt = None
+        out.append(alt if (alt is not None and alt.score > b.score) else b)
+    return order_blocks(out)
+
+
+def detect_blocks(img, min_score: float = 0.5, lang: str = "", *, two_pass: bool = True,
+                  reocr_threshold: float = 0.75) -> list[Block]:
+    """First pass whole-page OCR, group into bubbles, then (when `two_pass`)
+    re-OCR low-confidence blocks at 2x upscale and keep the higher-scoring
+    reading. Calls the module-level :func:`ocr_lines` so tests can fake it."""
+    blocks = group_blocks([ln for ln in ocr_lines(img, lang) if ln[2] >= min_score])
+    if not two_pass or not blocks:
+        return blocks
+    try:
+        return reocr_low_confidence_blocks(img, blocks, lang=lang, threshold=reocr_threshold)
+    except Exception:
+        return blocks
 
 
 # ---- import ------------------------------------------------------------------------------------------
@@ -267,32 +412,76 @@ def _font(size: int, cjk: bool):
     return ImageFont.load_default(size)
 
 
+_MIN_FONTSIZE = 6
+
+
 def _wrap(draw, text: str, font, width: int) -> list[str]:
+    """Greedy wrap with a hard width clamp: a single token wider than `width`
+    is hard-split character by character so a line never exceeds `width`
+    (unless one glyph alone is wider than the box)."""
+    width = max(int(width), 1)
     cjk = bool(_CJK.search(text))
     tokens = list(text.replace("\n", " ")) if cjk else text.replace("\n", " ").split(" ")
     lines, cur = [], ""
+
+    def emit(line):
+        lines.append(line)
+
     for t in tokens:
+        if t == "":
+            continue
+        if draw.textlength(t, font=font) > width:
+            # overlong token (no spaces, or a URL): hard-break by characters
+            if cur:
+                emit(cur)
+                cur = ""
+            piece = ""
+            for ch in t:
+                trial = piece + ch
+                if draw.textlength(trial, font=font) <= width or not piece:
+                    piece = trial
+                else:
+                    emit(piece)
+                    piece = ch
+            cur = piece
+            continue
         trial = (cur + ("" if cjk else " ") + t) if cur else t
-        if draw.textlength(trial, font=font) <= width or not cur:
+        if draw.textlength(trial, font=font) <= width:
             cur = trial
         else:
-            lines.append(cur)
+            emit(cur)
             cur = t
     if cur:
         lines.append(cur)
     return lines
 
 
-def _fit(draw, text: str, box_w: int, box_h: int, cjk: bool):
-    """Largest font size at which the wrapped text fits the box."""
-    for size in range(min(box_h, 56), 9, -1):
+def _fit(draw, text: str, box_w: int, box_h: int, cjk: bool, stroke: int = 0):
+    """Largest font size at which the wrapped text fits the box, hard-clamped:
+    no width slack (the old 1.02 tolerance is gone), stroke space reserved,
+    shrink down to ``_MIN_FONTSIZE``. The caller must still check overflow —
+    when even the minimum size does not fit, the returned lines overflow and
+    typeset flags the block instead of drawing it."""
+    usable_w = max(int(box_w) - 2 * int(stroke), 1)
+    line_pad = int(stroke) * 2
+    for size in range(min(box_h, 56), _MIN_FONTSIZE - 1, -1):
         font = _font(size, cjk)
-        lines = _wrap(draw, text, font, box_w)
-        line_h = size * 1.12
-        if len(lines) * line_h <= box_h and all(draw.textlength(ln, font=font) <= box_w * 1.02 for ln in lines):
+        lines = _wrap(draw, text, font, usable_w)
+        line_h = size * 1.12 + line_pad
+        if lines and len(lines) * line_h <= box_h and all(draw.textlength(ln, font=font) + 2 * stroke <= box_w for ln in lines):
             return font, lines, size
-    font = _font(10, cjk)
-    return font, _wrap(draw, text, font, box_w), 10
+    font = _font(_MIN_FONTSIZE, cjk)
+    return font, _wrap(draw, text, font, usable_w), _MIN_FONTSIZE
+
+
+def _fits_in_area(draw, lines, font, size: int, box_w: int, box_h: int, stroke: int = 0) -> bool:
+    """True iff every line fits the (inscribed) area with stroke reserved."""
+    line_h = size * 1.12 + int(stroke) * 2
+    if not lines:
+        return True
+    if len(lines) * line_h > box_h:
+        return False
+    return all(draw.textlength(ln, font=font) + 2 * int(stroke) <= box_w for ln in lines)
 
 
 def _bubble_area(img, box):
@@ -349,28 +538,72 @@ def erase_text(img, blocks: list[Block]):
     return out, fills
 
 
-def typeset(img, blocks: list[Block], texts: list[str], fills):
+def _area_polygon(area) -> list[list[int]]:
+    """Rectangle polygon for an inscribed area (test helper + documentation of
+    the guarantee: drawn lines are clamped to this rectangle, which is inside
+    the bubble mask for elliptical bubbles)."""
+    x0, y0, x1, y1 = area
+    return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
+
+
+def typeset(img, blocks: list[Block], texts: list[str], fills, flags: list[bool] | None = None, *, return_flags: bool = False):
+    """Erase-free re-typesetting into the inscribed bubble area.
+
+    Hard clamp: the fitted font is hard-clamped to the inscribed area
+    (:func:`_fit` + :func:`_fits_in_area`, stroke reserved). When even the
+    minimum size does not fit, the block is flagged `needs_review` and its
+    text is not drawn at all, instead of overflowing/clipping the mask.
+
+    Flag access (pipeline.py/qa.py/web.py are untouched): the optional `flags`
+    list is cleared and filled per block (True = needs_review), every block
+    also gets `block.needs_review` set, and `return_flags=True` returns
+    ``(image, flags)``. Default callers keep getting just the image.
+    """
     cv2, np, Image, ImageDraw, ImageFont = _deps()
+    out_flags: list[bool] = []
     pil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
     draw = ImageDraw.Draw(pil)
     for b, text, fill in zip(blocks, texts, fills):
         text = (text or "").strip()
         if not text:
+            out_flags.append(False)
             continue
         ax0, ay0, ax1, ay1 = _bubble_area(img, b.box) if fill else b.box
         mx, my = int((ax1 - ax0) * 0.04), int((ay1 - ay0) * 0.04)
         area = (ax0 + mx, ay0 + my, ax1 - mx, ay1 - my)
+        area_w = max(area[2] - area[0], 20)
+        area_h = max(area[3] - area[1], 14)
+        stroke = 0 if fill else 2
         cjk = bool(_CJK.search(text))
-        font, lines, size = _fit(draw, text, max(area[2] - area[0], 20), max(area[3] - area[1], 14), cjk)
+        font, lines, size = _fit(draw, text, area_w, area_h, cjk, stroke=stroke)
+        if not _fits_in_area(draw, lines, font, size, area_w, area_h, stroke=stroke):
+            # overflow even at the minimum size: flag instead of clipping
+            b.needs_review = True
+            out_flags.append(True)
+            continue
+        b.needs_review = False
+        out_flags.append(False)
         bg = fill or tuple(int(c) for c in img[(b.box[1] + b.box[3]) // 2, (b.box[0] + b.box[2]) // 2])
         lum = 0.114 * bg[0] + 0.587 * bg[1] + 0.299 * bg[2]
         ink, halo = ((20, 20, 20), (255, 255, 255)) if lum > 128 else ((245, 245, 245), (0, 0, 0))
-        line_h = size * 1.12
-        top = (area[1] + area[3]) / 2 - len(lines) * line_h / 2
+        line_h = size * 1.12 + stroke * 2
+        # clamp the vertical span inside the area (centred span already fits by
+        # _fits_in_area; clamp guards rounding / glyph-metric drift)
+        span = len(lines) * line_h
+        if span > area_h:
+            span = float(area_h)
+            line_h = span / max(len(lines), 1)
+        top = (area[1] + area[3]) / 2 - span / 2
         cx = (area[0] + area[2]) / 2
         for i, ln in enumerate(lines):
-            draw.text((cx, top + (i + 0.5) * line_h), ln, font=font, fill=ink, anchor="mm", stroke_width=0 if fill else 2, stroke_fill=halo)
-    return cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
+            y = top + (i + 0.5) * line_h
+            y = max(area[1] + line_h / 2, min(y, area[3] - line_h / 2))
+            draw.text((cx, y), ln, font=font, fill=ink, anchor="mm", stroke_width=stroke, stroke_fill=halo)
+    if flags is not None:
+        flags.clear()
+        flags.extend(out_flags)
+    out = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
+    return (out, out_flags) if return_flags else out
 
 
 def render_page(db: Database, chapter_id: int, out_path: str | Path | None = None, *, translated: bool = True) -> bytes:

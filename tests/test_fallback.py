@@ -154,3 +154,101 @@ def test_maybe_chain_policy():
     assert maybe_chain(general, MockProvider()) is general  # general stands alone
     twin = MTOnly()
     assert maybe_chain(engine, twin) is engine  # same-named helper adds nothing
+
+
+# -- translate_batch ----------------------------------------------------------
+
+def test_batch_preserves_order():
+    """translate_batch returns one result per input, in input order."""
+    from babelink.fallback import BATCH_SEPARATOR
+
+    c = ChainProvider([MockProvider()])
+    srcs = ["alpha", "beta", "gamma", "delta"]
+    out = c.translate_batch(srcs)
+    assert out == srcs  # MockProvider echoes; joined call splits back in order
+    assert c.usage["calls"] >= 1
+    # exact separator join would be 1 call (echo preserves marker)
+    assert BATCH_SEPARATOR in c.members[0].calls[0]["source"] or len(c.members[0].calls) == len(srcs)
+
+
+def test_batch_empty_and_single():
+    c = ChainProvider([MockProvider()])
+    assert c.translate_batch([]) == []
+    assert c.translate_batch(["solo"]) == ["solo"]
+
+
+def test_batch_primary_down_fallback_serves_all():
+    """Primary fully down -> fallback serves every item, order intact."""
+    c = ChainProvider([Down(), MockProvider()])
+    srcs = ["one", "two", "three"]
+    out = c.translate_batch(srcs)
+    assert out == srcs
+    assert c.served_by == "mock"
+    # joined attempt fails on primary, per-item failover serves all via fallback
+    assert c.usage["failovers"] >= 1
+
+
+def test_batch_single_bad_item_isolated():
+    """One item that raises ProviderError on the primary does not poison the
+    rest: good items still translate (order preserved), bad item fails over."""
+    from babelink.fallback import BATCH_SEPARATOR
+
+    class Flaky(MockProvider):
+        """Raises ProviderError only when source contains 'bad'."""
+
+        name = "flaky"
+
+        def translate(self, source, **kw):
+            if "bad" in source:
+                raise ProviderError("flaky on bad item")
+            return super().translate(source, **kw)
+
+    c = ChainProvider([Flaky(), MockProvider()])
+    srcs = ["good-1", "bad-item", "good-2"]
+    out = c.translate_batch(srcs)
+    assert out == ["good-1", "bad-item", "good-2"]
+    # good items went through primary (joined or per-item); the joined call
+    # contained 'bad' so it failed over to per-item isolation: primary served
+    # the goods, fallback served the bad item.
+    assert c.members[0].usage["calls"] == 2 or c.members[1].usage["calls"] == 1
+
+
+def test_batch_split_mismatch_falls_back_to_per_item():
+    """If the model doesn't preserve the separator, per-item still delivers."""
+
+    class Mangles(MockProvider):
+        """Strips the batch marker so split count mismatches."""
+
+        name = "mangle"
+
+        def translate(self, source, **kw):
+            return super().translate(source.replace("<<<BABELINK_SEG>>>", " "), **kw)
+
+    c = ChainProvider([Mangles()])
+    srcs = ["x1", "x2", "x3"]
+    out = c.translate_batch(srcs)
+    assert out == srcs
+
+
+def test_batch_provider_native_delegates():
+    """A member exposing translate_batch is used directly (provider allows it)."""
+
+    class NativeBatch(MockProvider):
+        name = "native"
+        calls_native = 0
+
+        def translate_batch(self, sources, **kw):
+            type(self).calls_native = type(self).calls_native + 1 if hasattr(type(self), "calls_native") else 1
+            self.usage["calls"] += 1
+            return [f"[{s}]" for s in sources]
+
+    class NotNative(MockProvider):
+        name = "plain"
+
+    n, p = NativeBatch(), NotNative()
+    c = ChainProvider([n])
+    out = c.translate_batch(["a", "b"])
+    assert out == ["[a]", "[b]"]
+    assert n.usage["calls"] == 1
+    assert p.usage["calls"] == 0
+

@@ -42,8 +42,9 @@ class CatOllamaProvider(OllamaProvider):
     prompt_features = frozenset()
 
     def __init__(self, model: str = DEFAULT_MODEL, base_url: str = "http://localhost:11434",
-                 num_ctx: int = 8192, timeout: float = 900):
-        super().__init__(model=model, base_url=base_url, num_ctx=num_ctx, timeout=timeout)
+                 num_ctx: int = 8192, timeout: float = 900, keep_alive: str = "30m", temperature: float = 0.2):
+        super().__init__(model=model, base_url=base_url, num_ctx=num_ctx, timeout=timeout, keep_alive=keep_alive)
+        self.temperature = temperature
         self.name = f"cat:{model}"
 
     def translate(self, source: str, glossary: dict[str, str] | None = None, context: str = "",
@@ -51,7 +52,7 @@ class CatOllamaProvider(OllamaProvider):
                   target_lang: str = "en", tm_hints=None, on_delta: Optional[Delta] = None) -> str:
         mt = max_tokens or auto_max_tokens(source)
         user = cat_prompt(source, source_lang=source_lang, target_lang=target_lang)  # bare: see prompt_features
-        out = prompts.clean_output(self.chat("", user, temperature=0.2, max_tokens=mt, on_delta=on_delta))
+        out = prompts.clean_output(self.chat("", user, temperature=self.temperature, max_tokens=mt, on_delta=on_delta))
         if prompts.looks_like_refusal(out, source):
             self.usage["refusals"] += 1
             _s, neutral = prompts.neutral_prompt(source, source_lang, target_lang)

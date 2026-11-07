@@ -9,7 +9,7 @@ Drop in an EPUB, get back a translated EPUB. Built for translators: review names
 Local-first. Runs on your own models. Nothing leaves your machine unless you point it at a remote endpoint.
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
-[![tests](https://img.shields.io/badge/tests-128%20passing-2ea44f)](docs/DEVELOPMENT.md)
+[![tests](https://img.shields.io/badge/tests-174%20passing-2ea44f)](docs/DEVELOPMENT.md)
 [![local first](https://img.shields.io/badge/runs-locally%20with%20Ollama-1f2328)](#models)
 [![status](https://img.shields.io/badge/status-beta%20(0.2)-green)](docs/ROADMAP.md)
 
@@ -165,7 +165,7 @@ complete delivery, QA-clean, nothing refused) that tracks what the harness contr
 - **ParallelFiction** ja→en bake-off: CAT-Translate wins the engine choice; harness matches bare fluency ±2.
 - **Rashomon** ja→en long-form (32 paragraphs): 32/32 complete both legs, QA warnings 5 → 1.
 - **Full book**: 1,648 chapters / 81,798 segments audited with 0 tag/segment issues; exported EPUB validates.
-- 128 offline tests, every bug a regression test plus a row in [docs/REGRESSIONS.md](docs/REGRESSIONS.md).
+- 174 offline tests, every bug a regression test plus a row in [docs/REGRESSIONS.md](docs/REGRESSIONS.md).
 
 Numbers, method and honest limits: [docs/EVALUATION.md](docs/EVALUATION.md). Corpora and what's next:
 [docs/DATASETS.md](docs/DATASETS.md). What is not built: [docs/GAPS.md](docs/GAPS.md).
@@ -290,7 +290,7 @@ Theme (system, light, dark) and accent colour are under the circle icon.
 
 ```bash
 pip install -e ".[web,images,dev]"
-python -m pytest -q                                      # 128 tests; no network or model needed
+python -m pytest -q                                      # 174 tests; no network or model needed
 python scripts/ui_smoke.py --url http://127.0.0.1:8765   # novel flow in a real browser (needs playwright)
 python scripts/ui_pages_smoke.py --url http://127.0.0.1:8765   # comic-page flow in a real browser
 python scripts/ui_live_smoke.py --url http://127.0.0.1:8765    # live streaming, Stop, double click (needs a running Ollama model)

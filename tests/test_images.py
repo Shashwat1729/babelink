@@ -234,3 +234,173 @@ def test_job_refuses_upload_names_that_climb_out_of_the_folder(client):
     j = client.post(f"/api/projects/{pid}/jobs", json={"kind": "import_images", "uploads": ["../../x.png"]}, headers=H)
     job = wait(client, j.json()["id"])
     assert job["status"] == "error" and "invalid upload name" in job["error"]
+
+
+# ---- reading order, two-pass OCR, refit clamp --------------------------------
+
+
+def _synthetic_page(rects, w=700, h=700):
+    """Synthetic page built with cv2 rectangles (white bg, outlined boxes) for
+    the given (x0, y0, x1, y1) text areas; returns the cv2 image."""
+    import numpy as np
+    import cv2 as _cv2
+    img = np.full((h, w, 3), 255, np.uint8)
+    for (x0, y0, x1, y1) in rects:
+        _cv2.rectangle(img, (x0, y0), (x1, y1), (0, 0, 0), 3)
+        _cv2.rectangle(img, (x0 + 4, y0 + 4), (x1 - 4, y1 - 4), (220, 220, 220), -1)
+    return img
+
+
+def test_reading_order_vertical_columns_rtl_synthetic_page():
+    """Vertical manga: a synthetic page (cv2 rectangles) with two tall columns
+    each holding a top and a bottom bubble must read right-to-left,
+    top-to-bottom within a column. Input order is deliberately shuffled so
+    only geometry decides."""
+    import cv2 as _cv2  # noqa: F401
+    # (x0, y0, x1, y1): right column first in reading order
+    r_top = (500, 20, 550, 140)
+    r_bot = (500, 220, 550, 340)
+    l_top = (200, 20, 250, 140)
+    l_bot = (200, 220, 250, 340)
+    page_img = _synthetic_page([r_top, r_bot, l_top, l_bot])
+    assert page_img.shape[0] == 700 and page_img.shape[1] == 700
+    # fake OCR lines at exactly the drawn rectangles, in scrambled order
+    lines = [
+        (quad(*l_bot), "L-bottom", 0.9),
+        (quad(*r_top), "R-top", 0.9),
+        (quad(*l_top), "L-top", 0.9),
+        (quad(*r_bot), "R-bottom", 0.9),
+    ]
+    blocks = images.group_blocks(lines)
+    assert [b.text for b in blocks] == ["R-top", "R-bottom", "L-top", "L-bottom"]
+    # explicit mode agrees; horizontal mode gives the wrong (pre-fix) order
+    rtl = images.order_blocks(blocks, mode="rtl_columns")
+    assert [b.text for b in rtl] == ["R-top", "R-bottom", "L-top", "L-bottom"]
+    horiz = images.order_blocks(blocks, mode="horizontal")
+    assert [b.text for b in horiz] == ["L-top", "R-top", "L-bottom", "R-bottom"]
+    assert images._layout_mode(blocks, mode="auto") == "rtl_columns"
+
+
+def test_reading_order_horizontal_synthetic_page_rows():
+    """Horizontal page: rows top-to-bottom, left-to-right, even when the
+    input lines arrive reversed."""
+    r_top_left = (20, 20, 170, 60)
+    r_top_right = (350, 20, 500, 60)
+    r_bottom = (20, 300, 170, 340)
+    _synthetic_page([r_top_left, r_top_right, r_bottom])
+    lines = [
+        (quad(*r_bottom), "third", 0.9),
+        (quad(*r_top_right), "second", 0.9),
+        (quad(*r_top_left), "first", 0.9),
+    ]
+    blocks = images.group_blocks(lines)
+    assert [b.text for b in blocks] == ["first", "second", "third"]
+    assert images._layout_mode(blocks, mode="auto") == "horizontal"
+
+
+def test_two_pass_reocr_triggers_on_low_confidence_block(tmp_path, monkeypatch):
+    """Low-confidence block is re-OCR'd at 2x upscale and the higher-scoring
+    reading wins; a high-confidence block is not re-OCR'd. No word lists."""
+    import numpy as np
+    img = np.full((300, 400, 3), 255, np.uint8)
+    calls = []
+
+    def fake_ocr(im, lang=""):
+        calls.append(im.shape[:2])
+        if len(calls) == 1:
+            return [(quad(100, 100, 200, 160), "lowread", 0.60)]
+        # upscaled crop call: return a better reading in upscaled coords
+        uh, uw = im.shape[:2]
+        return [([[0, 0], [uw, 0], [uw, uh], [0, uh]], "betterread", 0.92)]
+
+    monkeypatch.setattr(images, "ocr_lines", fake_ocr)
+    blocks = images.detect_blocks(img, min_score=0.5, lang="")
+    assert len(calls) == 2                                  # full page + one upscaled re-OCR
+    pad = 6
+    exp_crop_h, exp_crop_w = 160 + pad - (100 - pad), 200 + pad - (100 - pad)
+    assert calls[0] == (300, 400)
+    assert calls[1] == (exp_crop_h * 2, exp_crop_w * 2)     # proves 2x upscale
+    assert [b.text for b in blocks] == ["betterread"]       # higher score wins
+    assert blocks[0].score == pytest.approx(0.92)
+
+    calls.clear()
+
+    def fake_ocr_high(im, lang=""):
+        calls.append(im.shape[:2])
+        return [(quad(100, 100, 200, 160), "confident", 0.95)]
+
+    monkeypatch.setattr(images, "ocr_lines", fake_ocr_high)
+    blocks = images.detect_blocks(img, min_score=0.5, lang="")
+    assert len(calls) == 1                                  # never re-OCR'd
+    assert [b.text for b in blocks] == ["confident"]
+
+
+def test_two_pass_keeps_original_when_upscaled_scores_lower(monkeypatch):
+    import numpy as np
+    img = np.full((300, 400, 3), 255, np.uint8)
+
+    def fake_ocr(im, lang=""):
+        return [(quad(100, 100, 200, 160), "original", 0.60)]
+
+    monkeypatch.setattr(images, "ocr_lines", fake_ocr)
+    blocks = images.detect_blocks(img, min_score=0.5, lang="")
+    assert [b.text for b in blocks] == ["original"]
+
+
+def _ink_outside_polygon(out, clean, polygon):
+    """Copies of ink pixels (new dark pixels) whose (x, y) lie outside
+    `polygon` (list of [x, y] vertices, single convex ring)."""
+    import numpy as np
+    import cv2
+    ink = ((out[:, :, :].sum(axis=2) < 150) & (clean[:, :, :].sum(axis=2) >= 150))
+    mask = np.zeros((out.shape[0], out.shape[1]), np.uint8)
+    cv2.fillPoly(mask, [np.array(polygon, np.int32)], 255)
+    ys, xs = np.nonzero(ink)
+    return [(int(x), int(y)) for x, y in zip(xs, ys) if not mask[y, x]]
+
+
+def test_typeset_refit_never_overflows_bubble_mask(tmp_path):
+    """Fitted text must never spill outside the bubble mask polygon: try a
+    sequence of increasingly long translations on the round-bubble fixture and
+    assert no ink pixel lands outside the ellipse."""
+    img = images.read_image(page(tmp_path))
+    block = fake_detect(img)[0]
+    clean, fills = images.erase_text(img, [block])
+    texts = [
+        "Hi",
+        "They carried him into the courtyard and laid him on the stone bench.",
+        "Luo Tian struggled to his feet, his handsome face bruised and swollen. " * 3,
+        "A" * 200,
+    ]
+    # widen the ellipse polygon slightly: use the inscribed rect (_bubble_area)
+    # shrunk into a polygon, which we also require to contain the ink.
+    for text in texts:
+        blk = images.Block(block.box, list(block.polys), "", block.score)
+        flags: list[bool] = []
+        out = images.typeset(clean, [blk], [text], list(fills), flags=flags)
+        assert flags == [False] and blk.needs_review is False
+        ax0, ay0, ax1, ay1 = images._bubble_area(clean, blk.box)
+        poly = images._area_polygon((ax0 + 2, ay0 + 2, ax1 - 2, ay1 - 2))
+        assert _ink_outside_polygon(out, clean, poly) == [], text[:40]
+
+
+def test_typeset_flags_needs_review_instead_of_clipping(tmp_path):
+    """When even the minimum font does not fit, typeset flags needs_review and
+    draws nothing — it must not clip/overflow to make room."""
+    import numpy as np
+    from PIL import Image
+    img = np.full((120, 120, 3), 255, np.uint8)  # clean white page
+    tiny_box = (50, 50, 80, 70)
+    blk = images.Block(tiny_box, [quad(*tiny_box)], "", 0.9)
+    flags: list[bool] = []
+    out = images.typeset(img, [blk], ["A very long translation that cannot possibly fit in this tiny bubble " * 3],
+                         [None], flags=flags)
+    assert flags == [True] and blk.needs_review is True
+    # also the return_flags form agrees
+    blk2 = images.Block(tiny_box, [quad(*tiny_box)], "", 0.9)
+    out2, flags2 = images.typeset(img, [blk2], ["A very long translation that cannot possibly fit in this tiny bubble " * 3],
+                                   [None], return_flags=True)
+    assert flags2 == [True]
+    # the flagged block produced no ink outside its own small box region
+    assert _ink_outside_polygon(out, img, images._area_polygon((45, 45, 85, 75))) == []
+    assert _ink_outside_polygon(out2, img, images._area_polygon((45, 45, 85, 75))) == []

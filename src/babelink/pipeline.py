@@ -108,13 +108,16 @@ def _repetition(draft: str) -> int:
     return max(counts.values()) - 1
 
 
-def select_best(source: str, drafts: list[str], hits: dict[str, str], source_lang: str) -> str:
+def select_best(source: str, drafts: list[str], hits: dict[str, str], source_lang: str,
+                term_losers: dict[str, list[str]] | None = None) -> str:
     """Pick the best of several model draws, deterministically: most glossary
     terms applied, then fewest QA errors, then least source-script leftover,
-    then least repetition. Ties keep the first draw (stable)."""
+    then least repetition. Ties keep the first draw (stable).
+    `term_losers` (from run_qa/reconcile) makes leaking a losing variant of a
+    name a QA error here, not just a post-hoc warning."""
     def key(d: str):
         hb, _ = term_adherence(source, d, hits) if hits else (0, 0)
-        errs = sum(1 for sev, _, _ in check_segment(source, d, source_lang, hits) if sev == "error")
+        errs = sum(1 for sev, _, _ in check_segment(source, d, source_lang, hits, term_losers) if sev == "error")
         cjk = sum(1 for p in d.split("\n\n") if _CJK.search(p))
         return (hb, -errs, -cjk, -_repetition(d))
 
@@ -171,6 +174,8 @@ def translate_project(db: Database, project_id: int, provider, *, limit: Optiona
     feats = ALL_FEATURES if features is None else frozenset(features)
     project = db.get_project(project_id)
     glossary = build_glossary(db, project_id)
+    from .qa import _losers_from_db  # variant-leak QA needs the losing surfaces (E18/D)
+    losers = _losers_from_db(db, project_id)
     if "glossary" in feats and not glossary and _has_untranslated_terms(db, project_id):
         # Upload-and-go: nobody ran analyze+suggest yet. The helper (or a
         # general translator) classifies once; an MT-only translator alone
@@ -184,6 +189,7 @@ def translate_project(db: Database, project_id: int, provider, *, limit: Optiona
             translator = _engine(provider)
             suggest_term_translations(db, project_id, suggester, limit=60, retry_present=present, translator=translator)
             glossary = build_glossary(db, project_id)
+            losers = _losers_from_db(db, project_id)
     style = project["style"] or "faithful-natural"
     pending = db.open_segments(project_id, chapter_id)
     if only_ids is not None:
@@ -195,6 +201,7 @@ def translate_project(db: Database, project_id: int, provider, *, limit: Optiona
     run_id = db.add_model_run(ModelRun(None, project_id, "translation", provider.name, prompts.PROMPT_VERSION,
                                        _version(sorted(glossary.items())), "", "", json.dumps(params)))
     stats = {"segments": 0, "tm_exact": 0, "refusals": 0, "escalated": 0, "skipped": 0}
+    register_baseline: list[str] = [r["translated_text"] for r in db.segments_for_project(project_id, translated_only=True)][-30:]
     titled: set[int] = set()
 
     def _mt(text: str, kw: dict, seg, on_delta) -> str:
@@ -249,7 +256,8 @@ def translate_project(db: Database, project_id: int, provider, *, limit: Optiona
                 ctx_on = "context" in feats
                 kw = dict(glossary=hits if "glossary" in feats else {}, style=style, source_lang=project["source_lang"], target_lang=project["target_lang"],
                           context=build_context(db, project_id, s, project_dir if "bible" in feats else None,
-                                                n_prev=n_prev if ctx_on else 0, n_summaries=2 if ctx_on else 0),
+                                                n_prev=n_prev if ctx_on else 0, n_summaries=2 if ctx_on else 0,
+                                                n_entity=3 if ctx_on else 0),
                           tm_hints=[(r["source_text"], r["translated_text"]) for _, r in db.tm_similar(project_id, s["source_text"])] if "tm" in feats else [])
                 def delta(text: str, s=s) -> None:  # Stop takes effect mid-paragraph: leaving the stream cancels the model's generation
                     if should_stop and should_stop():
@@ -281,7 +289,7 @@ def translate_project(db: Database, project_id: int, provider, *, limit: Optiona
                     from .entities import restore_proxies as _restore
 
                     drafts = [_restore(d, mask_map)[0] for d in drafts]
-                translated = select_best(s["source_text"], drafts, hits, project["source_lang"])
+                translated = select_best(s["source_text"], drafts, hits, project["source_lang"], term_losers=losers)
                 missing = any(k in s["source_text"] and v not in translated for k, v in hits.items())
                 if _mask:
                     # A proxy the model swallowed (not emitted) is a missing
@@ -296,13 +304,15 @@ def translate_project(db: Database, project_id: int, provider, *, limit: Optiona
 
                             _retry = _restore2(_retry, mask_map)[0]
                         drafts.append(_retry)
-                        translated = select_best(s["source_text"], drafts, hits, project["source_lang"])
+                        translated = select_best(s["source_text"], drafts, hits, project["source_lang"], term_losers=losers)
                     except (Stopped, RefusalError):
                         pass
                 if escalate_provider is not None and escalate_provider is not provider:
                     translated = _escalate(escalate_provider, s, translated, hits, kw, project, stats)
                 new_tm = True
-            qa_segment(db, project_id, s["id"], s["source_text"], translated, project["source_lang"], hits)
+            qa_segment(db, project_id, s["id"], s["source_text"], translated, project["source_lang"], hits, term_losers=losers,
+                       register_baseline=register_baseline[-30:])
+            register_baseline.append(translated)
             blocking = db.conn.execute("SELECT 1 FROM qa_results WHERE segment_id=? AND severity='error'", (s["id"],)).fetchone()
             if not db.update_segment(s["id"], translated=translated, model_run_id=run_id, only_if_state=OPEN_STATES,
                                      state=SegmentState.NEEDS_REVIEW if blocking else SegmentState.TRANSLATED):

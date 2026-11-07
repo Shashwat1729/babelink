@@ -13,13 +13,35 @@ from .base import ChatProvider, Delta
 
 
 class OllamaProvider(ChatProvider):
-    def __init__(self, model: str = "qwen2.5:7b", base_url: str = "http://localhost:11434", num_ctx: int = 8192, timeout: float = 900):
+    def __init__(self, model: str = "qwen2.5:7b", base_url: str = "http://localhost:11434", num_ctx: int = 8192, timeout: float = 900, keep_alive: str = "30m"):
         super().__init__()
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.num_ctx = num_ctx
         self.timeout = timeout
+        self.keep_alive = keep_alive
         self.name = f"ollama:{model}"
+
+    def warm_up(self, prompt: str = "hi", max_tokens: int = 1, timeout: float = 120) -> float:
+        """Load this model into Ollama memory and start the keep_alive clock.
+
+        Uses a 1-token generation so warmup cost is minimal. Returns seconds
+        spent. Calling this before a translation run removes model-load
+        latency from the first segment (see fallback.warmup + bench).
+        """
+        import time
+
+        t0 = time.time()
+        body = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+            "keep_alive": self.keep_alive,
+            "options": {"num_predict": max_tokens, "num_ctx": self.num_ctx},
+        }
+        resp = httpx.post(f"{self.base_url}/api/chat", json=body, timeout=timeout)
+        resp.raise_for_status()
+        return time.time() - t0
 
     def _chat_once(self, system: str, user: str, temperature: float, max_tokens: int, on_delta: Delta | None = None) -> str:
         body = {
@@ -27,7 +49,7 @@ class OllamaProvider(ChatProvider):
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
             "stream": on_delta is not None,
             "think": False,
-            "keep_alive": "30m",
+            "keep_alive": self.keep_alive,
             "options": {"temperature": temperature, "num_predict": max_tokens, "num_ctx": self.num_ctx},
         }
         if on_delta:
@@ -83,3 +105,45 @@ def list_models(base_url: str = "http://localhost:11434") -> list[str]:
         return [m["name"] for m in installed(base_url)]
     except Exception:
         return []
+
+
+def warm_model(model: str, base_url: str = "http://localhost:11434", keep_alive: str = "30m", num_ctx: int = 4096, timeout: float = 120) -> float:
+    """Load a raw Ollama model by name (no provider object needed). Returns seconds.
+
+    Keeps engine+helper resident across alternation when called for both right
+    before a run. Pair with OllamaProvider.warm_up for provider-owned warmup.
+    """
+    import time
+
+    t0 = time.time()
+    body = {
+        "model": model,
+        "messages": [{"role": "user", "content": "hi"}],
+        "stream": False,
+        "keep_alive": keep_alive,
+        "options": {"num_predict": 1, "num_ctx": num_ctx},
+    }
+    resp = httpx.post(f"{base_url.rstrip('/')}/api/chat", json=body, timeout=timeout)
+    resp.raise_for_status()
+    return time.time() - t0
+
+
+def warm_provider(provider, timeout: float = 120) -> float | None:
+    """Warm any provider: prefer its own warm_up(), else a 1-token chat.
+
+    Returns seconds spent, or None when the provider cannot be warmed without
+    a real task call (e.g. MockProvider needs no warmup).
+    """
+    import time
+
+    fn = getattr(provider, "warm_up", None)
+    if callable(fn):
+        t0 = time.time()
+        fn(timeout=timeout)
+        return time.time() - t0
+    chat = getattr(provider, "chat", None)
+    if callable(chat):
+        t0 = time.time()
+        chat("", "hi", max_tokens=1)
+        return time.time() - t0
+    return None
